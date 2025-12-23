@@ -18,11 +18,11 @@ export const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
     e.preventDefault();
     setError("");
 
-    // Simple authentication: username = school name, password = provided password
-    const validUsername = "enkomokazini";
-    const validPassword = "enkomokazini2025"; // updated admin password
+    // Simple authentication: use environment variables for credentials
+    const validUsername = import.meta.env.VITE_ADMIN_USERNAME ?? "enkomokazini";
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD ?? "";
 
-    if (username.toLowerCase() === validUsername && password.toLowerCase() === validPassword) {
+    if (username.toLowerCase() === String(validUsername).toLowerCase() && password === String(validPassword)) {
       toast({
         title: "Login Successful!",
         description: "Welcome to the admin dashboard.",
