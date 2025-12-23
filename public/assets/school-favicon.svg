@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" ry="10" fill="#2563eb" />
+  <!-- center the uploaded logo inside the blue square, leaving padding -->
+  <image href="/assets/School%20Logo.jpeg" x="8" y="8" width="48" height="48" preserveAspectRatio="xMidYMid meet" />
+</svg>
