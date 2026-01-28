@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { LogOut, Bell, Settings } from "lucide-react";
+import { LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw } from "lucide-react";
 import { loadSiteData, saveSiteData, resetSiteData, SiteData } from "@/lib/siteData";
 import { useToast } from "@/hooks/use-toast";
 import { HeroCarousel } from "@/components/HeroCarousel";
@@ -12,7 +12,6 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-// Cloudinary response type
 interface CloudinaryUploadResponse {
   secure_url: string;
   public_id: string;
@@ -25,17 +24,42 @@ interface CloudinaryUploadResponse {
   };
 }
 
+interface TeamMember {
+  name: string;
+  role: string;
+  image: string;
+  initials?: string;
+}
+
+interface Sponsor {
+  name: string;
+  url: string;
+  image: string;
+}
+
 export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [data, setData] = useState<SiteData>(loadSiteData());
   const [editing, setEditing] = useState<Partial<SiteData>>(data);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
-  // ✅ Use environment variables instead of hardcoding
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
+  // ✅ CORRECT CLOUD NAME FROM YOUR SCREENSHOT: dn2inhi6kt (with extra 'i')
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inhi6kt';
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
 
   useEffect(() => {
+    console.log('🔧 Cloudinary Config:', {
+      cloudName,
+      uploadPreset,
+      hasCloudName: !!cloudName,
+      hasUploadPreset: !!uploadPreset,
+      mode: import.meta.env.MODE
+    });
+    
+    // Test Cloudinary connection on load
+    testCloudinaryConnection();
+    
     const onUpdate = (e: CustomEvent) => {
       const updatedData = e?.detail || loadSiteData();
       setData(updatedData);
@@ -46,180 +70,289 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
- const uploadImage = async (
-  file: File, 
-  type: 'team' | 'sponsor' | 'hero' | 'school', 
-  name?: string
-): Promise<string> => {
-  setIsUploading(true);
-  
-  try {
-    // Validate file
-    if (!file || !file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file",
-        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
-    
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
-
-    // SIMPLIFIED - Remove all extra parameters
-    const folders = {
-      team: 'enkomokazini/team/',
-      sponsor: 'enkomokazini/sponsors/',
-      hero: 'enkomokazini/hero/',
-      school: 'enkomokazini/'
-    };
-
-    const folder = folders[type] || 'enkomokazini/';
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', uploadPreset);
-    formData.append('folder', folder);
-    // ⚠️ REMOVE TAGS: formData.append('tags', `enkomokazini_${type}`);
-    
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-    
-    console.log('📤 Uploading to Cloudinary...', {
-      cloudName,
-      uploadPreset,
-      file: file.name,
-      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-      folder
-    });
-    
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
-    
-    const result = await response.json();
-    
-    console.log('📥 Cloudinary Response:', result);
-    
-    if (response.ok && result.secure_url) {
-      console.log('✅ Cloudinary upload successful:', result.secure_url);
-      toast({
-        title: "Upload successful!",
-        description: `Image uploaded to ${folder}`,
+  // ✅ SIMPLE CLOUDINARY CONNECTION TEST
+  const testCloudinaryConnection = async () => {
+    try {
+      console.log('🔍 Testing Cloudinary connection...');
+      
+      // Create a tiny test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#4F46E5';
+        ctx.fillRect(0, 0, 2, 2);
+      }
+      
+      const blob = await new Promise<Blob | null>((resolve) => 
+        canvas.toBlob(resolve, 'image/png')
+      );
+      
+      if (!blob) throw new Error('Could not create test image');
+      
+      const formData = new FormData();
+      formData.append('file', blob, 'test.png');
+      formData.append('upload_preset', uploadPreset);
+      formData.append('tags', 'enkomokazini_test');
+      
+      console.log('Testing with:', { cloudName, uploadPreset });
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+        method: 'POST',
+        body: formData,
       });
       
-      return result.secure_url;
-    } else {
-      console.error('❌ Cloudinary upload failed:', result);
+      const result = await response.json();
       
-      // Check if it's still showing unsigned error
-      if (result.error?.message?.includes('unsigned')) {
+      if (response.ok && result.secure_url) {
+        console.log('✅ Cloudinary connected! URL:', result.secure_url);
+        setCloudinaryStatus('connected');
+        
         toast({
-          title: "Preset Mode Issue",
-          description: "Your preset appears to be in Unsigned mode. Please create a new Signed preset.",
+          title: "Cloudinary Connected",
+          description: "Ready to upload images",
+        });
+      } else {
+        console.error('❌ Cloudinary test failed:', result);
+        setCloudinaryStatus('disconnected');
+        
+        let errorMessage = result.error?.message || 'Connection failed';
+        if (errorMessage.includes('unsigned')) {
+          errorMessage = 'Preset is in unsigned mode. Please check Cloudinary settings.';
+        }
+        
+        toast({
+          title: "Cloudinary Disconnected",
+          description: errorMessage,
           variant: "destructive"
         });
       }
       
-      throw new Error(result.error?.message || 'Upload failed');
+    } catch (error: any) {
+      console.error('❌ Cloudinary connection error:', error);
+      setCloudinaryStatus('disconnected');
+      
+      toast({
+        title: "Cloudinary Error",
+        description: error.message || "Cannot connect to Cloudinary",
+        variant: "destructive"
+      });
     }
-    
-  } catch (error) {
-    console.error('❌ Upload error:', error);
-    
-    // Fallback to data URL
-    const dataUrl = await fileToDataUrl(file);
-    
-    toast({
-      title: "Saved locally",
-      description: "Image saved to browser storage",
-    });
-    
-    return dataUrl;
-  } finally {
-    setIsUploading(false);
-  }
-};
+  };
 
-// Add this to your component temporarily
-const testCloudinary = async () => {
-  console.log('Testing Cloudinary connection...');
-  
-  const cloudName = 'dn2inh6kt';
-  const testPreset = 'enkomokazini-signed-upload';
-  
-  // Create a tiny test image
-  const canvas = document.createElement('canvas');
-  canvas.width = 10;
-  canvas.height = 10;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#4F46E5';
-  ctx.fillRect(0, 0, 10, 10);
-  
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-  const file = new File([blob], 'test.png', { type: 'image/png' });
-  
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', testPreset);
-  
-  try {
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
+  // ✅ SIMPLIFIED UPLOAD FUNCTION
+  const uploadImage = async (
+    file: File, 
+    type: 'team' | 'sponsor' | 'hero' | 'school', 
+    name?: string
+  ): Promise<string> => {
+    setIsUploading(true);
     
-    const result = await response.json();
-    console.log('Test Result:', result);
-    
-    if (result.secure_url) {
-      alert('✅ Cloudinary test successful!');
-    } else {
-      alert('❌ Test failed: ' + (result.error?.message || 'Unknown'));
+    try {
+      // Validate file
+      if (!file || !file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file",
+          description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
+      
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Maximum file size is 10MB",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
+
+      // If Cloudinary is disconnected, use local storage
+      if (cloudinaryStatus === 'disconnected') {
+        console.warn('Cloudinary disconnected, using local storage');
+        const dataUrl = await fileToDataUrl(file);
+        
+        toast({
+          title: "Saved locally",
+          description: "Image saved to browser storage",
+        });
+        
+        return dataUrl;
+      }
+
+      // Define folder structure
+      const folder = `enkomokazini/${type}`;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', folder);
+      
+      console.log('📤 Uploading to Cloudinary:', {
+        cloudName,
+        uploadPreset,
+        file: file.name,
+        folder,
+        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`
+      });
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result: CloudinaryUploadResponse = await response.json();
+      
+      console.log('📥 Cloudinary Response:', result);
+      
+      if (response.ok && result.secure_url) {
+        console.log('✅ Upload successful:', result.secure_url);
+        
+        toast({
+          title: "Upload successful!",
+          description: `Image uploaded to ${folder}`,
+        });
+        
+        return result.secure_url;
+      } else {
+        console.error('❌ Upload failed:', result);
+        
+        let errorMessage = result.error?.message || 'Upload failed';
+        
+        toast({
+          title: "Upload failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        
+        // Fallback to data URL
+        return await fileToDataUrl(file);
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Upload error:', error);
+      
+      // Fallback to data URL
+      const dataUrl = await fileToDataUrl(file);
+      
+      toast({
+        title: "Saved locally",
+        description: "Image saved to browser storage",
+      });
+      
+      return dataUrl;
+    } finally {
+      setIsUploading(false);
     }
-  } catch (error) {
-    console.error('Test Error:', error);
-    alert('❌ Connection error: ' + error.message);
-  }
-};
+  };
 
-// Call this in browser console: testCloudinary()
-
-
-
-  
+  // ✅ QUICK TEST FUNCTION
+  const quickTest = async () => {
+    console.log('🧪 Quick Cloudinary test...');
+    
+    setIsUploading(true);
+    
+    try {
+      // Create a test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const gradient = ctx.createLinearGradient(0, 0, 100, 100);
+        gradient.addColorStop(0, '#4F46E5');
+        gradient.addColorStop(0.5, '#10B981');
+        gradient.addColorStop(1, '#F59E0B');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 100, 100);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('TEST', 50, 50);
+      }
+      
+      const blob = await new Promise<Blob | null>((resolve) => 
+        canvas.toBlob(resolve, 'image/png')
+      );
+      
+      if (!blob) throw new Error('Could not create test image');
+      
+      const file = new File([blob], `test-${Date.now()}.png`, { type: 'image/png' });
+      
+      toast({
+        title: "Testing Cloudinary...",
+        description: "Uploading test image",
+      });
+      
+      const imageUrl = await uploadImage(file, 'school', 'test_image');
+      
+      // Verify the URL
+      const img = new Image();
+      img.onload = () => {
+        toast({
+          title: "✅ Test Successful",
+          description: "Cloudinary is working!",
+        });
+        console.log('Test image URL:', imageUrl);
+        
+        // Open in new tab to verify
+        window.open(imageUrl, '_blank');
+      };
+      
+      img.onerror = () => {
+        throw new Error('Uploaded image not accessible');
+      };
+      
+      img.src = imageUrl;
+      
+    } catch (error: any) {
+      console.error('Test failed:', error);
+      toast({
+        title: "❌ Test Failed",
+        description: error.message || "Cannot connect to Cloudinary",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsUploading(true);
     
     try {
       const currentData = loadSiteData();
-      const payload = { 
+      const payload: SiteData = { 
         ...currentData, 
         ...editing,
         heroImages: editing.heroImages || currentData.heroImages || [],
-        team: editing.team || currentData.team || [],
-        sponsors: editing.sponsors || currentData.sponsors || [],
-        services: editing.services || currentData.services || []
-      } as SiteData;
+        team: (editing.team || currentData.team || []).map(member => ({
+          ...member,
+          image: member.image || ''
+        })),
+        sponsors: (editing.sponsors || currentData.sponsors || []).map(sponsor => ({
+          ...sponsor,
+          image: sponsor.image || ''
+        })),
+        services: editing.services || currentData.services || [],
+        ui: editing.ui || currentData.ui || {}
+      };
       
-      const nextLocal = saveSiteData(payload);
-      if (nextLocal) {
-        setData(nextLocal as SiteData);
-        setEditing(nextLocal as SiteData);
+      const savedData = saveSiteData(payload);
+      if (savedData) {
+        setData(savedData);
+        setEditing(savedData);
         
-        window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: nextLocal }));
+        window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: savedData }));
         
         toast({
           title: "Saved successfully!",
-          description: "All changes saved to browser storage",
+          description: cloudinaryStatus === 'connected' 
+            ? "All changes saved with Cloudinary images" 
+            : "All changes saved to browser storage",
         });
       }
     } catch (error) {
@@ -246,35 +379,34 @@ const testCloudinary = async () => {
     });
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ HERO IMAGES UPLOAD
+  const handleHeroImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    const currentImages = editing.heroImages || data.heroImages || [];
-    const urls: string[] = [...currentImages];
-    
     toast({
       title: "Uploading hero images...",
-      description: `Uploading ${files.length} image(s) to Cloudinary`,
+      description: `Uploading ${files.length} image(s)`,
     });
     
     try {
+      const currentImages = editing.heroImages || data.heroImages || [];
+      const updatedImages = [...currentImages];
+      
       for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const url = await uploadImage(f, 'hero', `hero_${urls.length + i + 1}`);
-        urls.push(url);
+        const url = await uploadImage(files[i], 'hero', `hero_${updatedImages.length + i + 1}`);
+        updatedImages.push(url);
       }
       
-      setEditing({ ...editing, heroImages: urls });
+      setEditing({ ...editing, heroImages: updatedImages });
       
-      const updatedData = { ...data, heroImages: urls };
+      const updatedData = { ...data, heroImages: updatedImages };
       saveSiteData(updatedData);
-      setData(updatedData);
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
         title: "Hero images uploaded",
-        description: `Added ${files.length} image(s) to Cloudinary`,
+        description: `Added ${files.length} image(s) successfully`,
       });
     } catch (error) {
       toast({
@@ -283,16 +415,22 @@ const testCloudinary = async () => {
         variant: "destructive"
       });
     }
+    
+    e.target.value = '';
   };
 
-  // Team editors
+  // ✅ TEAM MEMBER HANDLERS
   const addTeamMember = () => {
     const t = editing.team ? [...editing.team] : [];
-    t.push({ name: "New Member", role: "Team Role", initials: "NM", image: "" });
+    t.push({ 
+      name: "New Member", 
+      role: "Team Role", 
+      image: ""
+    });
     setEditing({ ...editing, team: t });
   };
   
-  const updateTeamMember = (index: number, value: any) => {
+  const updateTeamMember = (index: number, value: Partial<TeamMember>) => {
     const t = editing.team ? [...editing.team] : [];
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
@@ -300,7 +438,6 @@ const testCloudinary = async () => {
     const updatedData = { ...data };
     if (!updatedData.team) updatedData.team = [];
     updatedData.team[index] = { ...updatedData.team[index], ...value };
-    setData(updatedData);
     saveSiteData(updatedData);
     window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
@@ -321,18 +458,22 @@ const testCloudinary = async () => {
       const url = await uploadImage(file, 'team', memberName);
       updateTeamMember(index, { image: url });
     } catch (error) {
-      // Error handled in uploadImage function
+      // Error already handled in uploadImage
     }
   };
 
-  // Sponsors editors
+  // ✅ SPONSOR HANDLERS
   const addSponsor = () => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
-    s.push({ name: "New Sponsor", url: "https://example.com", image: "" });
+    s.push({ 
+      name: "New Sponsor", 
+      url: "https://example.com", 
+      image: "" 
+    });
     setEditing({ ...editing, sponsors: s });
   };
   
-  const updateSponsor = (index: number, value: any) => {
+  const updateSponsor = (index: number, value: Partial<Sponsor>) => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
@@ -340,7 +481,6 @@ const testCloudinary = async () => {
     const updatedData = { ...data };
     if (!updatedData.sponsors) updatedData.sponsors = [];
     updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
-    setData(updatedData);
     saveSiteData(updatedData);
     window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
@@ -361,14 +501,17 @@ const testCloudinary = async () => {
       const url = await uploadImage(file, 'sponsor', sponsorName);
       updateSponsor(index, { image: url });
     } catch (error) {
-      // Error handled in uploadImage function
+      // Error already handled in uploadImage
     }
   };
 
-  // Services editors (streams & subjects)
+  // ✅ SERVICES HANDLERS
   const addService = () => {
     const s = editing.services ? [...editing.services] : [];
-    s.push({ category: "New Stream", subjects: [{ name: "New Subject", passMark: "50%" }] });
+    s.push({ 
+      category: "New Stream", 
+      subjects: [{ name: "New Subject", passMark: "50%" }] 
+    });
     setEditing({ ...editing, services: s });
   };
   
@@ -394,7 +537,7 @@ const testCloudinary = async () => {
   
   const updateSubject = (serviceIndex: number, subjectIndex: number, value: any) => {
     const s = editing.services ? [...editing.services] : [];
-    const subjects = s[serviceIndex].subjects ? [...(s[serviceIndex].subjects as any[])] : [];
+    const subjects = s[serviceIndex].subjects ? [...s[serviceIndex].subjects] : [];
     subjects[subjectIndex] = { ...subjects[subjectIndex], ...value };
     s[serviceIndex] = { ...s[serviceIndex], subjects };
     setEditing({ ...editing, services: s });
@@ -402,7 +545,7 @@ const testCloudinary = async () => {
   
   const removeSubject = (serviceIndex: number, subjectIndex: number) => {
     const s = editing.services ? [...editing.services] : [];
-    const subjects = s[serviceIndex].subjects ? [...(s[serviceIndex].subjects as any[])] : [];
+    const subjects = s[serviceIndex].subjects ? [...s[serviceIndex].subjects] : [];
     subjects.splice(subjectIndex, 1);
     s[serviceIndex] = { ...s[serviceIndex], subjects };
     setEditing({ ...editing, services: s });
@@ -417,10 +560,9 @@ const testCloudinary = async () => {
       
       const updatedData = { ...data, schoolImage: url };
       saveSiteData(updatedData);
-      setData(updatedData);
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     } catch (error) {
-      // Error handled in uploadImage function
+      // Error already handled in uploadImage
     }
   };
 
@@ -429,20 +571,19 @@ const testCloudinary = async () => {
     
     if (url.startsWith('data:image') || 
         url.startsWith('http') || 
-        url.includes('cloudinary.com') ||
-        url.includes('res.cloudinary.com')) {
+        url.includes('cloudinary.com')) {
       return url;
     }
     
-    if (url.startsWith('assets/') || url.startsWith('public/')) {
-      return `/${url}`;
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return url;
     }
     
     if (url && !url.includes('/') && url.includes('.')) {
       return `/assets/${url}`;
     }
     
-    return url;
+    return url || '';
   };
 
   const removeHeroImage = (index: number) => {
@@ -453,8 +594,12 @@ const testCloudinary = async () => {
     
     const updatedData = { ...data, heroImages: newImages };
     saveSiteData(updatedData);
-    setData(updatedData);
     window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+  };
+
+  const refreshCloudinaryConnection = async () => {
+    setCloudinaryStatus('checking');
+    await testCloudinaryConnection();
   };
 
   return (
@@ -490,12 +635,87 @@ const testCloudinary = async () => {
       </header>
 
       <main className="p-6">
+        {/* Cloudinary Status Bar */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-blue-800">Cloudinary Status</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={refreshCloudinaryConnection}
+                disabled={isUploading}
+                className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={cloudinaryStatus === 'checking' ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button
+                onClick={quickTest}
+                disabled={isUploading}
+                className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
+              >
+                Test Upload
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium ${
+              cloudinaryStatus === 'connected' 
+                ? 'bg-green-100 text-green-800 border border-green-200' 
+                : cloudinaryStatus === 'disconnected'
+                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                : 'bg-blue-100 text-blue-800 border border-blue-200'
+            }`}>
+              {cloudinaryStatus === 'connected' ? (
+                <UploadCloud size={16} className="mr-2" />
+              ) : cloudinaryStatus === 'disconnected' ? (
+                <CloudOff size={16} className="mr-2" />
+              ) : (
+                <RefreshCw size={16} className="animate-spin mr-2" />
+              )}
+              Status: {cloudinaryStatus === 'connected' ? 'CONNECTED' : 
+                      cloudinaryStatus === 'disconnected' ? 'DISCONNECTED' : 'CHECKING...'}
+            </div>
+            
+            <div className="text-right">
+              <p className="text-sm text-blue-700">
+                Cloud Name: <code className="ml-1 bg-blue-100 px-2 py-1 rounded text-xs">{cloudName}</code>
+              </p>
+              <p className="text-sm text-blue-700 mt-1">
+                Preset: <code className="ml-1 bg-blue-100 px-2 py-1 rounded text-xs">{uploadPreset}</code>
+              </p>
+            </div>
+          </div>
+          
+          {cloudinaryStatus === 'disconnected' && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
+              <h3 className="text-sm font-medium text-amber-800 mb-1">Setup Required:</h3>
+              <div className="text-sm text-amber-700 space-y-2">
+                <p>1. Ensure your <code>.env</code> file has:</p>
+                <pre className="mt-1 p-2 bg-amber-100 text-amber-800 rounded text-xs overflow-x-auto">
+{`VITE_CLOUDINARY_CLOUD_NAME=dn2inhi6kt
+VITE_CLOUDINARY_UPLOAD_PRESET=enkomokazini-test`}
+                </pre>
+                <p>2. In Cloudinary Dashboard:</p>
+                <ul className="ml-4 list-disc text-xs">
+                  <li>Go to <strong>Settings → Upload</strong></li>
+                  <li>Find preset <code>enkomokazini-test</code></li>
+                  <li>Ensure it's <strong>enabled</strong></li>
+                  <li>Set to <strong>Unsigned</strong> mode</li>
+                  <li>Enable "Auto-create folders"</li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Editor */}
+          {/* Editor Panel */}
           <div className="bg-card rounded-xl p-6 shadow-card border border-border">
             <h2 className="font-serif text-xl font-semibold text-foreground mb-4">Site Editor</h2>
 
             <div className="space-y-4">
+              {/* School Name */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Name</label>
                 <input 
@@ -506,6 +726,7 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Tagline */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Tagline</label>
                 <input 
@@ -516,6 +737,7 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Description</label>
                 <textarea 
@@ -527,6 +749,7 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Contact Email */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Contact Email</label>
                 <input 
@@ -537,6 +760,7 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Phone & Postal */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">Phone</label>
@@ -558,6 +782,7 @@ const testCloudinary = async () => {
                 </div>
               </div>
 
+              {/* Address */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Address</label>
                 <input 
@@ -568,6 +793,7 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Pass Rate */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Pass Rate</label>
                 <input 
@@ -579,9 +805,12 @@ const testCloudinary = async () => {
                 />
               </div>
 
+              {/* Team Members Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
-                <p className="text-xs text-muted-foreground mb-2">Images saved to Cloudinary: <code>enkomokazini/team/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Images {cloudinaryStatus === 'connected' ? 'uploaded to Cloudinary' : 'saved locally'}
+                </p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
@@ -597,7 +826,7 @@ const testCloudinary = async () => {
                                 img.style.display = 'none';
                                 const parent = img.parentElement;
                                 if (parent) {
-                                  const initials = m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
+                                  const initials = m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
                                   const span = document.createElement('span');
                                   span.className = 'text-accent-foreground font-bold';
                                   span.textContent = initials;
@@ -606,7 +835,9 @@ const testCloudinary = async () => {
                               }}
                             />
                           ) : (
-                            <span className="text-accent-foreground font-bold">{m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
+                            <span className="text-accent-foreground font-bold">
+                              {m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                            </span>
                           )}
                         </div>
                         <div className="flex-1 grid grid-cols-2 gap-2">
@@ -654,7 +885,7 @@ const testCloudinary = async () => {
                   </div>
                   <button 
                     onClick={addTeamMember} 
-                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded"
+                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
                     disabled={isUploading}
                   >
                     Add Member
@@ -662,9 +893,12 @@ const testCloudinary = async () => {
                 </div>
               </div>
 
+              {/* Sponsors Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
-                <p className="text-xs text-muted-foreground mb-2">Logos saved to Cloudinary: <code>enkomokazini/sponsors/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Logos {cloudinaryStatus === 'connected' ? 'uploaded to Cloudinary' : 'saved locally'}
+                </p>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
                     <div key={idx} className="flex gap-2 items-center p-2 border border-border rounded">
@@ -735,7 +969,7 @@ const testCloudinary = async () => {
                   ))}
                   <button 
                     onClick={addSponsor} 
-                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded"
+                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
                     disabled={isUploading}
                   >
                     Add Sponsor
@@ -743,14 +977,17 @@ const testCloudinary = async () => {
                 </div>
               </div>
 
+              {/* Hero Images Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
-                <p className="text-xs text-muted-foreground mb-2">Images saved to Cloudinary: <code>enkomokazini/hero/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Images {cloudinaryStatus === 'connected' ? 'uploaded to Cloudinary' : 'saved locally'}
+                </p>
                 <input 
                   type="file" 
                   accept="image/*" 
                   multiple 
-                  onChange={handleFileUpload} 
+                  onChange={handleHeroImagesUpload} 
                   className="w-full"
                   disabled={isUploading}
                 />
@@ -781,9 +1018,12 @@ const testCloudinary = async () => {
                 </p>
               </div>
 
+              {/* School Image Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
-                <p className="text-xs text-muted-foreground mb-2">Image saved to Cloudinary: <code>enkomokazini/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Image {cloudinaryStatus === 'connected' ? 'uploaded to Cloudinary' : 'saved locally'}
+                </p>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -810,8 +1050,9 @@ const testCloudinary = async () => {
                 </div>
               </div>
 
+              {/* Services */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Services (Streams) — edit subjects and pass marks</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Services (Streams)</label>
                 <div className="space-y-3">
                   {(editing.services || data.services || []).map((svc, sIdx) => (
                     <div key={sIdx} className="border border-border rounded p-3 bg-background">
@@ -849,9 +1090,9 @@ const testCloudinary = async () => {
                               onClick={()=>removeSubject(sIdx, subIdx)} 
                               className="px-2 py-1 bg-destructive text-destructive-foreground rounded"
                               disabled={isUploading}
-                        >
-                          Remove
-                        </button>
+                            >
+                              Remove
+                            </button>
                           </div>
                         ))}
                         <div className="mt-2">
@@ -878,87 +1119,100 @@ const testCloudinary = async () => {
                 </div>
               </div>
 
+              {/* UI Settings */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Services UI Settings</label>
+                <label className="block text-sm font-medium text-foreground mb-1">UI Settings</label>
                 <div className="grid grid-cols-3 gap-2">
-                  <input 
-                    type="number" 
-                    value={(editing.ui && editing.ui.servicesPreviewCount) || (data.ui && data.ui.servicesPreviewCount) || 6} 
-                    onChange={(e)=>setEditing({...editing, ui: {...(editing.ui||data.ui||{}), servicesPreviewCount: Number(e.target.value)}})} 
-                    className="px-2 py-2 rounded border border-border bg-background" 
-                    disabled={isUploading}
-                  />
-                  <input 
-                    value={(editing.ui && editing.ui.badgeColor) || (data.ui && data.ui.badgeColor) || 'blue'} 
-                    onChange={(e)=>setEditing({...editing, ui: {...(editing.ui||data.ui||{}), badgeColor: e.target.value}})} 
-                    className="px-2 py-2 rounded border border-border bg-background" 
-                    disabled={isUploading}
-                  />
-                  <input 
-                    type="number" 
-                    value={(editing.ui && editing.ui.transitionMs) || (data.ui && data.ui.transitionMs) || 300} 
-                    onChange={(e)=>setEditing({...editing, ui: {...(editing.ui||data.ui||{}), transitionMs: Number(e.target.value)}})} 
-                    className="px-2 py-2 rounded border border-border bg-background" 
-                    disabled={isUploading}
-                  />
+                  <div>
+                    <label className="text-xs text-muted-foreground">Preview Count</label>
+                    <input 
+                      type="number" 
+                      value={(editing.ui && editing.ui.servicesPreviewCount) || (data.ui && data.ui.servicesPreviewCount) || 6} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          servicesPreviewCount: Number(e.target.value)
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Badge Color</label>
+                    <input 
+                      value={(editing.ui && editing.ui.badgeColor) || (data.ui && data.ui.badgeColor) || 'blue'} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          badgeColor: e.target.value
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Transition (ms)</label>
+                    <input 
+                      type="number" 
+                      value={(editing.ui && editing.ui.transitionMs) || (data.ui && data.ui.transitionMs) || 300} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          transitionMs: Number(e.target.value)
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Preview count, badge color (name), and transition duration (ms)</p>
               </div>
 
-              <div className="flex gap-2">
+              {/* Save & Reset Buttons */}
+              <div className="flex gap-2 pt-4">
                 <button 
                   onClick={handleSave} 
-                  className="px-4 py-2 bg-accent text-accent-foreground rounded"
+                  className="flex-1 px-4 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90 disabled:opacity-50"
                   disabled={isUploading}
                 >
                   {isUploading ? "Saving..." : "Save All Changes"}
                 </button>
                 <button 
                   onClick={handleReset} 
-                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded"
+                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
                   disabled={isUploading}
                 >
                   Reset All
                 </button>
               </div>
-              
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Cloudinary Info:</h3>
-                <p className="text-xs text-blue-700">
-                  Images upload directly to Cloudinary. Check browser console (F12) for upload logs.
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Cloud Name: <code className="bg-blue-100 px-1">{cloudName}</code>
-                  {cloudName === 'dn2inh6kt' && (
-                    <span className="ml-2 text-amber-600 text-xs">(Using default)</span>
-                  )}
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Upload Preset: <code className="bg-blue-100 px-1">{uploadPreset}</code>
-                  {uploadPreset === 'enkomokazini-signed-upload' && (
-                    <span className="ml-2 text-amber-600 text-xs">(Using default)</span>
-                  )}
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  <strong>Environment:</strong> {import.meta.env.MODE}
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  <strong>IMPORTANT:</strong> Make sure your preset is set to "Signed" mode in Cloudinary settings.
-                </p>
-              </div>
             </div>
           </div>
 
-          {/* Preview */}
+          {/* Preview Panel */}
           <div className="space-y-6">
             <div className="sticky top-6 bg-card rounded-xl p-4 shadow-card border border-border">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-serif text-xl font-semibold text-foreground">
                   Live Preview
                 </h2>
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                  Auto-updating
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                    Auto-updating
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    cloudinaryStatus === 'connected' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {cloudinaryStatus === 'connected' ? 'Cloudinary' : 'Local Storage'}
+                  </span>
+                </div>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
                 Preview updates automatically as you edit. Save changes to persist them.
@@ -987,11 +1241,12 @@ const testCloudinary = async () => {
   );
 };
 
+// Utility function
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }
