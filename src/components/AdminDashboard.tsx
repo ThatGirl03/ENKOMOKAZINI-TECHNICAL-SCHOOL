@@ -104,7 +104,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const urls: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      urls.push(await uploadImage(f));
+      urls.push(await uploadImage(t));
     }
     setEditing({ ...editing, heroImages: urls });
   };
