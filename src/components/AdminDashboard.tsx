@@ -32,8 +32,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
 
   // ✅ CORRECT Cloudinary configuration - use proper environment variable names
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME';
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'YOUR_UPLOAD_PRESET';
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
 
   useEffect(() => {
     // Check Cloudinary connection on mount
@@ -69,130 +69,161 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   // ✅ FIXED: Complete uploadImage function with proper error handling
-  const uploadImage = async (
-    file: File, 
-    type: 'team' | 'sponsor' | 'hero' | 'school', 
-    name?: string
-  ): Promise<string> => {
-    setIsUploading(true);
-    
-    // Validate file
-    if (!file || !file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file",
-        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-        variant: "destructive"
-      });
-      setIsUploading(false);
-      return await fileToDataUrl(file);
-    }
-    
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 10MB",
-        variant: "destructive"
-      });
-      setIsUploading(false);
-      return await fileToDataUrl(file);
-    }
+const uploadImage = async (
+  file: File, 
+  type: 'team' | 'sponsor' | 'hero' | 'school', 
+  name?: string
+): Promise<string> => {
+  setIsUploading(true);
+  
+  // Validate file
+  if (!file || !file.type.startsWith('image/')) {
+    toast({
+      title: "Invalid file",
+      description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+      variant: "destructive"
+    });
+    setIsUploading(false);
+    return await fileToDataUrl(file);
+  }
+  
+  if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    toast({
+      title: "File too large",
+      description: "Maximum file size is 10MB",
+      variant: "destructive"
+    });
+    setIsUploading(false);
+    return await fileToDataUrl(file);
+  }
 
-    // Use fallback if Cloudinary is unavailable
-    if (cloudinaryStatus === 'unavailable' || cloudName === 'YOUR_CLOUD_NAME') {
-      console.warn('⚠️ Cloudinary not configured, using browser storage');
-      const dataUrl = await fileToDataUrl(file);
-      toast({
-        title: "Saved locally",
-        description: "Image saved to browser storage (Cloudinary not configured)",
-      });
-      setIsUploading(false);
-      return dataUrl;
-    }
+  // Use fallback if Cloudinary is unavailable
+  if (cloudinaryStatus === 'unavailable' || cloudName === 'YOUR_CLOUD_NAME') {
+    console.warn('⚠️ Cloudinary not configured, using browser storage');
+    const dataUrl = await fileToDataUrl(file);
+    toast({
+      title: "Saved locally",
+      description: "Image saved to browser storage (Cloudinary not configured)",
+    });
+    setIsUploading(false);
+    return dataUrl;
+  }
 
+  try {
+    // ⚠️ IMPORTANT: For unsigned uploads, you CANNOT specify folder in the request
+    // The folder must be configured in the upload preset settings in Cloudinary dashboard
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    
+    // ⚠️ REMOVE THIS LINE - folder cannot be specified with unsigned uploads
+    // formData.append('folder', folder);
+    
+    // ⚠️ REMOVE transformation parameter for now (can cause issues)
+    // if (type === 'team' || type === 'sponsor') {
+    //   formData.append('transformation', 'w_500,h_500,c_fill');
+    // }
+
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+    
+    console.log('📤 Uploading to Cloudinary:', {
+      cloudName,
+      uploadPreset,
+      file: file.name,
+      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      type
+    });
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ HTTP Error:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result: CloudinaryUploadResponse = await response.json();
+    
+    console.log('📥 Cloudinary Response:', result);
+    
+    if (result.error) {
+      console.error('❌ Cloudinary error:', result.error.message);
+      throw new Error(result.error.message);
+    }
+    
+    if (!result.secure_url) {
+      throw new Error('No secure_url returned from Cloudinary');
+    }
+    
+    console.log('✅ Cloudinary upload successful:', result.secure_url);
+    
+    toast({
+      title: "Upload successful!",
+      description: `Image uploaded successfully`,
+    });
+    
+    return result.secure_url;
+    
+  } catch (error: any) {
+    console.error('❌ Upload error:', error);
+    
+    // Fallback to data URL
+    const dataUrl = await fileToDataUrl(file);
+    
+    toast({
+      title: "Saved locally",
+      description: `Image saved to browser storage. Cloudinary error: ${error.message}`,
+      variant: "default"
+    });
+    
+    return dataUrl;
+  } finally {
+    setIsUploading(false);
+  }
+};
+
+const quickTest = async () => {
+  console.log('Testing Cloudinary config:', { cloudName, uploadPreset });
+  
+  // Create a simple test
+  const canvas = document.createElement('canvas');
+  canvas.width = 10;
+  canvas.height = 10;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'red';
+  ctx.fillRect(0, 0, 10, 10);
+  
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    
+    const file = new File([blob], 'test.png', { type: 'image/png' });
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    
     try {
-      // Define folders for different types
-      const folders: Record<string, string> = {
-        team: 'enkomokazini/team/',
-        sponsor: 'enkomokazini/sponsors/',
-        hero: 'enkomokazini/hero/',
-        school: 'enkomokazini/school/'
-      };
-
-      const folder = folders[type] || 'enkomokazini/';
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', uploadPreset);
-      formData.append('folder', folder);
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+        { method: 'POST', body: formData }
+      );
+      const result = await response.json();
+      console.log('Direct test result:', result);
       
-      // Add timestamp to prevent caching issues
-      formData.append('timestamp', Date.now().toString());
-      
-      // Optional: Add transformation parameters
-      if (type === 'team' || type === 'sponsor') {
-        formData.append('transformation', 'w_500,h_500,c_fill');
+      if (result.secure_url) {
+        alert('✅ Direct upload works!');
       }
-
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-      
-      console.log('📤 Uploading to Cloudinary:', {
-        cloudName,
-        uploadPreset,
-        file: file.name,
-        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-        folder,
-        type
-      });
-      
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result: CloudinaryUploadResponse = await response.json();
-      
-      console.log('📥 Cloudinary Response:', result);
-      
-      if (result.error) {
-        console.error('❌ Cloudinary error:', result.error.message);
-        throw new Error(result.error.message);
-      }
-      
-      if (!result.secure_url) {
-        throw new Error('No secure_url returned from Cloudinary');
-      }
-      
-      console.log('✅ Cloudinary upload successful:', result.secure_url);
-      
-      toast({
-        title: "Upload successful!",
-        description: `Image uploaded to ${folder}`,
-      });
-      
-      return result.secure_url;
-      
     } catch (error) {
-      console.error('❌ Upload error:', error);
-      
-      // Fallback to data URL
-      const dataUrl = await fileToDataUrl(file);
-      
-      toast({
-        title: "Saved locally",
-        description: `Image saved to browser storage. Cloudinary error: ${error.message}`,
-        variant: "default"
-      });
-      
-      return dataUrl;
-    } finally {
-      setIsUploading(false);
+      console.error('Direct test failed:', error);
     }
-  };
+  });
+};
 
+
+  
   const handleSave = async () => {
     setIsUploading(true);
     
