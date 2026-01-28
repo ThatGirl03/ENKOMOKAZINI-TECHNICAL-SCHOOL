@@ -87,21 +87,20 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           .substring(0, 50);
       }
       
-      // Determine folder based on type
-      const folders = {
-        team: 'enkomokazini/team/',
-        sponsor: 'enkomokazini/sponsors/',
-        hero: 'enkomokazini/hero/',
-        school: 'enkomokazini/'
-      };
-      
-      const folder = folders[type] || 'enkomokazini/';
-      
-      // Create form data for Cloudinary upload
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', uploadPreset);
-      formData.append('folder', folder);
+      // Clear, simple folder structure
+const folders = {
+  team: 'enkomokazini/team/',
+  sponsor: 'enkomokazini/sponsors/',
+  hero: 'enkomokazini/hero/',
+  school: 'enkomokazini/'
+};
+
+const folder = folders[type] || 'enkomokazini/';
+
+const formData = new FormData();
+formData.append('file', file);
+formData.append('upload_preset', uploadPreset);
+formData.append('folder', folder); // This will work now!
       
       // For signed uploads, you can also add tags
       formData.append('tags', `enkomokazini_${type}`);
