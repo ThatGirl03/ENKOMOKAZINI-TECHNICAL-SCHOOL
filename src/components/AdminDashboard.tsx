@@ -24,6 +24,14 @@ interface CloudinaryUploadResponse {
   };
 }
 
+// ✅ FIXED: Define proper TeamMember interface
+interface TeamMember {
+  name: string;
+  role: string;
+  image: string; // ✅ Changed from string | undefined to string
+  initials?: string;
+}
+
 export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [data, setData] = useState<SiteData>(loadSiteData());
   const [editing, setEditing] = useState<Partial<SiteData>>(data);
@@ -31,11 +39,20 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
 
-  // ✅ CORRECT Cloudinary configuration - use proper environment variable names
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
+  // ✅ FIXED: Use ACTUAL Cloudinary values - remove hardcoded defaults
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
   useEffect(() => {
+    // Log environment variables for debugging
+    console.log('🔧 Cloudinary Config:', {
+      cloudName,
+      uploadPreset,
+      hasCloudName: !!cloudName,
+      hasUploadPreset: !!uploadPreset,
+      mode: import.meta.env.MODE
+    });
+    
     // Check Cloudinary connection on mount
     checkCloudinaryConnection();
     
@@ -49,181 +66,214 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  // ✅ FIXED: Check Cloudinary connection
+  // ✅ FIXED: Better Cloudinary connection check
   const checkCloudinaryConnection = async () => {
     try {
-      // Simple test to check if Cloudinary API is reachable
+      if (!cloudName || !uploadPreset) {
+        console.warn('⚠️ Cloudinary environment variables not set');
+        setCloudinaryStatus('unavailable');
+        return;
+      }
+      
+      // Test with a simple HEAD request
       const response = await fetch(`https://res.cloudinary.com/${cloudName}/image/upload/v1700000000/sample.jpg`, {
         method: 'HEAD'
       });
       
-      if (response.ok || cloudName !== 'YOUR_CLOUD_NAME') {
+      if (response.ok) {
         setCloudinaryStatus('available');
       } else {
         setCloudinaryStatus('unavailable');
       }
     } catch (error) {
-      console.log('Cloudinary connection check failed, using fallback');
+      console.error('❌ Cloudinary connection check failed:', error);
       setCloudinaryStatus('unavailable');
     }
   };
 
-  // ✅ FIXED: Complete uploadImage function with proper error handling
-const uploadImage = async (
-  file: File, 
-  type: 'team' | 'sponsor' | 'hero' | 'school', 
-  name?: string
-): Promise<string> => {
-  setIsUploading(true);
-  
-  // Validate file
-  if (!file || !file.type.startsWith('image/')) {
-    toast({
-      title: "Invalid file",
-      description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-      variant: "destructive"
-    });
-    setIsUploading(false);
-    return await fileToDataUrl(file);
-  }
-  
-  if (file.size > 10 * 1024 * 1024) { // 10MB limit
-    toast({
-      title: "File too large",
-      description: "Maximum file size is 10MB",
-      variant: "destructive"
-    });
-    setIsUploading(false);
-    return await fileToDataUrl(file);
-  }
-
-  // Use fallback if Cloudinary is unavailable
-  if (cloudinaryStatus === 'unavailable' || cloudName === 'YOUR_CLOUD_NAME') {
-    console.warn('⚠️ Cloudinary not configured, using browser storage');
-    const dataUrl = await fileToDataUrl(file);
-    toast({
-      title: "Saved locally",
-      description: "Image saved to browser storage (Cloudinary not configured)",
-    });
-    setIsUploading(false);
-    return dataUrl;
-  }
-
-  try {
-    // ⚠️ IMPORTANT: For unsigned uploads, you CANNOT specify folder in the request
-    // The folder must be configured in the upload preset settings in Cloudinary dashboard
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', uploadPreset);
+  // ✅ FIXED: SIMPLIFIED uploadImage function
+  const uploadImage = async (
+    file: File, 
+    type: 'team' | 'sponsor' | 'hero' | 'school'
+  ): Promise<string> => {
+    setIsUploading(true);
     
-    // ⚠️ REMOVE THIS LINE - folder cannot be specified with unsigned uploads
-    // formData.append('folder', folder);
-    
-    // ⚠️ REMOVE transformation parameter for now (can cause issues)
-    // if (type === 'team' || type === 'sponsor') {
-    //   formData.append('transformation', 'w_500,h_500,c_fill');
-    // }
-
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-    
-    console.log('📤 Uploading to Cloudinary:', {
-      cloudName,
-      uploadPreset,
-      file: file.name,
-      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-      type
-    });
-    
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ HTTP Error:', response.status, errorText);
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // Validate file
+    if (!file || !file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+        variant: "destructive"
+      });
+      setIsUploading(false);
+      return await fileToDataUrl(file);
     }
     
-    const result: CloudinaryUploadResponse = await response.json();
-    
-    console.log('📥 Cloudinary Response:', result);
-    
-    if (result.error) {
-      console.error('❌ Cloudinary error:', result.error.message);
-      throw new Error(result.error.message);
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 10MB",
+        variant: "destructive"
+      });
+      setIsUploading(false);
+      return await fileToDataUrl(file);
     }
-    
-    if (!result.secure_url) {
-      throw new Error('No secure_url returned from Cloudinary');
-    }
-    
-    console.log('✅ Cloudinary upload successful:', result.secure_url);
-    
-    toast({
-      title: "Upload successful!",
-      description: `Image uploaded successfully`,
-    });
-    
-    return result.secure_url;
-    
-  } catch (error: any) {
-    console.error('❌ Upload error:', error);
-    
-    // Fallback to data URL
-    const dataUrl = await fileToDataUrl(file);
-    
-    toast({
-      title: "Saved locally",
-      description: `Image saved to browser storage. Cloudinary error: ${error.message}`,
-      variant: "default"
-    });
-    
-    return dataUrl;
-  } finally {
-    setIsUploading(false);
-  }
-};
 
-const quickTest = async () => {
-  console.log('Testing Cloudinary config:', { cloudName, uploadPreset });
-  
-  // Create a simple test
-  const canvas = document.createElement('canvas');
-  canvas.width = 10;
-  canvas.height = 10;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'red';
-  ctx.fillRect(0, 0, 10, 10);
-  
-  canvas.toBlob(async (blob) => {
-    if (!blob) return;
+    // ✅ FIXED: Check if Cloudinary is properly configured
+    if (!cloudName || !uploadPreset) {
+      console.warn('⚠️ Cloudinary not configured, using local storage');
+      const dataUrl = await fileToDataUrl(file);
+      toast({
+        title: "Saved locally",
+        description: "Image saved to browser storage (Cloudinary not configured)",
+      });
+      setIsUploading(false);
+      return dataUrl;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+      
+      // ✅ REMOVED: folder parameter for unsigned uploads
+      // ✅ REMOVED: transformation parameter
+
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+      
+      console.log('📤 Uploading to Cloudinary:', {
+        cloudName,
+        uploadPreset,
+        file: file.name,
+        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        type
+      });
+      
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ HTTP Error:', response.status, errorText);
+        
+        // Parse the error for better messaging
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error?.message || errorMessage;
+        } catch {}
+        
+        throw new Error(errorMessage);
+      }
+      
+      const result: CloudinaryUploadResponse = await response.json();
+      
+      console.log('📥 Cloudinary Response:', result);
+      
+      if (result.error) {
+        console.error('❌ Cloudinary error:', result.error.message);
+        throw new Error(result.error.message);
+      }
+      
+      if (!result.secure_url) {
+        throw new Error('No secure_url returned from Cloudinary');
+      }
+      
+      console.log('✅ Cloudinary upload successful:', result.secure_url);
+      
+      toast({
+        title: "Upload successful!",
+        description: "Image uploaded to Cloudinary",
+      });
+      
+      return result.secure_url;
+      
+    } catch (error: any) {
+      console.error('❌ Upload error:', error);
+      
+      // Fallback to data URL
+      const dataUrl = await fileToDataUrl(file);
+      
+      toast({
+        title: "Saved locally",
+        description: `Image saved to browser storage. ${error.message}`,
+        variant: "default"
+      });
+      
+      return dataUrl;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ✅ FIXED: Quick test function
+  const quickTest = async () => {
+    console.log('Testing Cloudinary config:', { cloudName, uploadPreset });
     
-    const file = new File([blob], 'test.png', { type: 'image/png' });
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', uploadPreset);
+    if (!cloudName || !uploadPreset) {
+      toast({
+        title: "❌ Configuration missing",
+        description: "Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your .env file",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
+      // Create a simple test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 10;
+      canvas.height = 10;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#4F46E5';
+        ctx.fillRect(0, 0, 10, 10);
+      }
+      
+      const blob = await new Promise<Blob | null>((resolve) => 
+        canvas.toBlob(resolve, 'image/png')
+      );
+      
+      if (!blob) throw new Error('Could not create test image');
+      
+      const file = new File([blob], 'test.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+      
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
         { method: 'POST', body: formData }
       );
+      
       const result = await response.json();
       console.log('Direct test result:', result);
       
       if (result.secure_url) {
-        alert('✅ Direct upload works!');
+        toast({
+          title: "✅ Cloudinary Test Successful",
+          description: "Upload preset is working correctly!",
+        });
+        console.log('Test image URL:', result.secure_url);
+      } else {
+        toast({
+          title: "❌ Upload failed",
+          description: result.error?.message || "Unknown error",
+          variant: "destructive"
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Direct test failed:', error);
+      toast({
+        title: "❌ Connection failed",
+        description: error.message || "Cannot connect to Cloudinary",
+        variant: "destructive"
+      });
     }
-  });
-};
+  };
 
-
-  
   const handleSave = async () => {
     setIsUploading(true);
     
@@ -233,7 +283,11 @@ const quickTest = async () => {
         ...currentData, 
         ...editing,
         heroImages: editing.heroImages || currentData.heroImages || [],
-        team: editing.team || currentData.team || [],
+        // ✅ FIXED: Ensure team members have proper image strings
+        team: (editing.team || currentData.team || []).map(member => ({
+          ...member,
+          image: member.image || '' // Ensure image is always a string
+        })),
         sponsors: editing.sponsors || currentData.sponsors || [],
         services: editing.services || currentData.services || [],
         ui: editing.ui || currentData.ui || {}
@@ -292,7 +346,7 @@ const quickTest = async () => {
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        const url = await uploadImage(f, 'hero', `hero_${urls.length + i + 1}`);
+        const url = await uploadImage(f, 'hero');
         urls.push(url);
       }
       
@@ -319,14 +373,13 @@ const quickTest = async () => {
     e.target.value = '';
   };
 
-  // Team editors
+  // ✅ FIXED: Team editors with proper image handling
   const addTeamMember = () => {
     const t = editing.team ? [...editing.team] : [];
     t.push({ 
       name: "New Member", 
       role: "Team Role", 
-      initials: "NM", 
-      image: "" 
+      image: "" // ✅ Always a string
     });
     setEditing({ ...editing, team: t });
   };
@@ -335,6 +388,13 @@ const quickTest = async () => {
     const t = editing.team ? [...editing.team] : [];
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
+    
+    // ✅ Immediately save to ensure preview updates
+    const updatedData = { ...data };
+    if (!updatedData.team) updatedData.team = [];
+    updatedData.team[index] = { ...updatedData.team[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeTeamMember = (index: number) => {
@@ -343,15 +403,19 @@ const quickTest = async () => {
     setEditing({ ...editing, team: t });
   };
 
+  // ✅ FIXED: Team image upload with immediate update
   const handleTeamImageUpload = async (index: number, file?: File) => {
     if (!file) return;
     
-    const teamMember = editing.team?.[index] || data.team?.[index];
-    const memberName = teamMember?.name || `member_${index + 1}`;
-    
     try {
-      const url = await uploadImage(file, 'team', memberName);
+      const url = await uploadImage(file, 'team');
+      // ✅ Update both editing state AND save immediately
       updateTeamMember(index, { image: url });
+      
+      toast({
+        title: "Team image updated",
+        description: "Team member image saved successfully",
+      });
     } catch (error) {
       // Error handled in uploadImage function
     }
@@ -372,6 +436,13 @@ const quickTest = async () => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
+    
+    // Immediately save for preview
+    const updatedData = { ...data };
+    if (!updatedData.sponsors) updatedData.sponsors = [];
+    updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeSponsor = (index: number) => {
@@ -384,7 +455,7 @@ const quickTest = async () => {
     if (!file) return;
     
     try {
-      const url = await uploadImage(file, 'sponsor', `sponsor_${index + 1}`);
+      const url = await uploadImage(file, 'sponsor');
       updateSponsor(index, { image: url });
     } catch (error) {
       // Error handled in uploadImage function
@@ -441,26 +512,35 @@ const quickTest = async () => {
     if (!file) return;
     
     try {
-      const url = await uploadImage(file, 'school', 'school_image');
+      const url = await uploadImage(file, 'school');
       setEditing({ ...editing, schoolImage: url });
+      
+      // Immediately save for preview
+      const updatedData = { ...data, schoolImage: url };
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     } catch (error) {
       // Error handled in uploadImage function
     }
   };
 
+  // ✅ FIXED: getImageSrc function
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    // Handle different URL types
-    if (url.startsWith('data:image') || 
-        url.startsWith('http') || 
-        url.includes('cloudinary.com')) {
+    // Handle data URLs
+    if (url.startsWith('data:image')) {
       return url;
     }
     
-    // Handle local paths
-    if (url.startsWith('assets/') || url.startsWith('public/')) {
-      return `/${url}`;
+    // Handle Cloudinary URLs
+    if (url.startsWith('http') && url.includes('cloudinary.com')) {
+      return url;
+    }
+    
+    // Handle relative URLs
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return url;
     }
     
     // Handle simple filenames
@@ -468,7 +548,8 @@ const quickTest = async () => {
       return `/assets/${url}`;
     }
     
-    return url;
+    // Return empty string for empty/null
+    return url || '';
   };
 
   const removeHeroImage = (index: number) => {
@@ -476,47 +557,10 @@ const quickTest = async () => {
     const newImages = [...currentImages];
     newImages.splice(index, 1);
     setEditing({ ...editing, heroImages: newImages });
-  };
-
-  // ✅ NEW: Test Cloudinary button
-  const testCloudinary = async () => {
-    setIsUploading(true);
-    try {
-      // Create a tiny test image
-      const canvas = document.createElement('canvas');
-      canvas.width = 50;
-      canvas.height = 50;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#4F46E5';
-        ctx.fillRect(0, 0, 50, 50);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '12px Arial';
-        ctx.fillText('Test', 15, 25);
-      }
-      
-      const blob = await new Promise<Blob | null>((resolve) => 
-        canvas.toBlob(resolve, 'image/png')
-      );
-      
-      if (!blob) throw new Error('Could not create test image');
-      
-      const file = new File([blob], 'test.png', { type: 'image/png' });
-      const result = await uploadImage(file, 'school', 'test_upload');
-      
-      toast({
-        title: "✅ Cloudinary Test Successful",
-        description: `Uploaded to: ${result.substring(0, 50)}...`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "❌ Cloudinary Test Failed",
-        description: error.message || "Please check your Cloudinary configuration",
-        variant: "destructive"
-      });
-    } finally {
-      setIsUploading(false);
-    }
+    
+    const updatedData = { ...data, heroImages: newImages };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   return (
@@ -570,7 +614,7 @@ const quickTest = async () => {
           </div>
           
           <button
-            onClick={testCloudinary}
+            onClick={quickTest}
             disabled={isUploading}
             className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50"
           >
@@ -674,12 +718,11 @@ const quickTest = async () => {
                 />
               </div>
 
-              {/* Team Members */}
+              {/* ✅ FIXED: Team Members Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Images {cloudinaryStatus === 'available' ? 'saved to Cloudinary' : 'saved locally'}: 
-                  <code className="ml-1 bg-gray-100 px-1 rounded">enkomokazini/team/</code>
+                  Images {cloudinaryStatus === 'available' ? 'uploaded to Cloudinary' : 'saved locally'}
                 </p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 gap-2">
@@ -696,7 +739,7 @@ const quickTest = async () => {
                                 img.style.display = 'none';
                                 const parent = img.parentElement;
                                 if (parent) {
-                                  const initials = m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
+                                  const initials = m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
                                   const span = document.createElement('span');
                                   span.className = 'text-accent-foreground font-bold';
                                   span.textContent = initials;
@@ -706,7 +749,7 @@ const quickTest = async () => {
                             />
                           ) : (
                             <span className="text-accent-foreground font-bold">
-                              {m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                              {m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
                             </span>
                           )}
                         </div>
@@ -763,12 +806,11 @@ const quickTest = async () => {
                 </div>
               </div>
 
-              {/* Sponsors */}
+              {/* ✅ FIXED: Sponsors Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Logos {cloudinaryStatus === 'available' ? 'saved to Cloudinary' : 'saved locally'}: 
-                  <code className="ml-1 bg-gray-100 px-1 rounded">enkomokazini/sponsors/</code>
+                  Logos {cloudinaryStatus === 'available' ? 'uploaded to Cloudinary' : 'saved locally'}
                 </p>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
@@ -848,12 +890,11 @@ const quickTest = async () => {
                 </div>
               </div>
 
-              {/* Hero Images */}
+              {/* ✅ FIXED: Hero Images Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Images {cloudinaryStatus === 'available' ? 'saved to Cloudinary' : 'saved locally'}: 
-                  <code className="ml-1 bg-gray-100 px-1 rounded">enkomokazini/hero/</code>
+                  Images {cloudinaryStatus === 'available' ? 'uploaded to Cloudinary' : 'saved locally'}
                 </p>
                 <input 
                   type="file" 
@@ -890,12 +931,11 @@ const quickTest = async () => {
                 </p>
               </div>
 
-              {/* School Image */}
+              {/* ✅ FIXED: School Image Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Image {cloudinaryStatus === 'available' ? 'saved to Cloudinary' : 'saved locally'}: 
-                  <code className="ml-1 bg-gray-100 px-1 rounded">enkomokazini/school/</code>
+                  Image {cloudinaryStatus === 'available' ? 'uploaded to Cloudinary' : 'saved locally'}
                 </p>
                 <input 
                   type="file" 
@@ -1065,37 +1105,60 @@ const quickTest = async () => {
                 </button>
               </div>
               
-              {/* Cloudinary Info */}
+              {/* ✅ FIXED: Cloudinary Info */}
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Cloudinary Configuration:</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-1">Cloudinary Status:</h3>
                 <p className="text-xs text-blue-700">
-                  Images {cloudinaryStatus === 'available' ? 'upload directly to Cloudinary' : 'are saved to browser storage'}
+                  {cloudinaryStatus === 'available' 
+                    ? '✅ Cloudinary is configured and ready' 
+                    : cloudinaryStatus === 'unavailable'
+                    ? '⚠️ Using local browser storage'
+                    : 'Checking Cloudinary connection...'}
                 </p>
-                <div className="mt-1 space-y-1">
+                <div className="mt-2 space-y-1">
                   <p className="text-xs text-blue-700">
-                    <strong>Cloud Name:</strong> <code className="bg-blue-100 px-1 rounded">{cloudName}</code>
-                    {cloudName === 'YOUR_CLOUD_NAME' && (
-                      <span className="ml-2 text-amber-600">(Not configured)</span>
+                    <strong>Cloud Name:</strong>{" "}
+                    <code className="bg-blue-100 px-1 rounded">
+                      {cloudName || 'Not set'}
+                    </code>
+                    {!cloudName && (
+                      <span className="ml-2 text-amber-600">(Required)</span>
                     )}
                   </p>
                   <p className="text-xs text-blue-700">
-                    <strong>Upload Preset:</strong> <code className="bg-blue-100 px-1 rounded">{uploadPreset}</code>
-                    {uploadPreset === 'YOUR_UPLOAD_PRESET' && (
-                      <span className="ml-2 text-amber-600">(Not configured)</span>
+                    <strong>Upload Preset:</strong>{" "}
+                    <code className="bg-blue-100 px-1 rounded">
+                      {uploadPreset || 'Not set'}
+                    </code>
+                    {!uploadPreset && (
+                      <span className="ml-2 text-amber-600">(Required)</span>
                     )}
                   </p>
                   <p className="text-xs text-blue-700">
-                    <strong>Environment:</strong> <code className="bg-blue-100 px-1 rounded">{import.meta.env.MODE}</code>
+                    <strong>Status:</strong>{" "}
+                    <span className={`px-1 rounded ${
+                      cloudinaryStatus === 'available' ? 'bg-green-100 text-green-800' :
+                      cloudinaryStatus === 'unavailable' ? 'bg-amber-100 text-amber-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {cloudinaryStatus}
+                    </span>
                   </p>
-                  <p className="text-xs text-blue-700 mt-2">
-                    <strong>Setup Instructions:</strong>
+                  <p className="text-xs text-blue-700">
+                    <strong>Environment:</strong>{" "}
+                    <code className="bg-blue-100 px-1 rounded">{import.meta.env.MODE}</code>
                   </p>
-                  <ol className="text-xs text-blue-700 ml-4 list-decimal">
-                    <li>Create a Cloudinary account</li>
-                    <li>Get your Cloud Name, API Key, and API Secret</li>
-                    <li>Create an Upload Preset (set to "Signed")</li>
-                    <li>Add environment variables to your .env file</li>
-                  </ol>
+                  {(!cloudName || !uploadPreset) && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                      <p className="text-xs text-amber-800 font-medium">Setup Required:</p>
+                      <ol className="text-xs text-amber-700 ml-4 list-decimal mt-1">
+                        <li>Create a <code>.env</code> file in your <code>ui/</code> folder</li>
+                        <li>Add: <code>VITE_CLOUDINARY_CLOUD_NAME=dn2inh6kt</code></li>
+                        <li>Add: <code>VITE_CLOUDINARY_UPLOAD_PRESET=your-preset-name</code></li>
+                        <li>Restart your development server</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
