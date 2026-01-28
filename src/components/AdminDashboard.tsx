@@ -18,7 +18,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
 
-  // Cloudinary configuration - HARDCODED
+
  // Cloudinary configuration - HARDCODED
 const cloudName = 'dn2inh6kt';
 const uploadPreset = 'enkomokazini-signed-upload';
