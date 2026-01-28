@@ -19,8 +19,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [isUploading, setIsUploading] = useState(false);
 
   // Cloudinary configuration
-  const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
-  const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-signed-upload';
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-signed-upload';
 
   useEffect(() => {
     const onUpdate = (e: any) => {
