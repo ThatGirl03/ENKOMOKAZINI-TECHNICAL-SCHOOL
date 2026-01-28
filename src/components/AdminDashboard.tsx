@@ -45,21 +45,15 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [uploadHistory, setUploadHistory] = useState<Array<{url: string, time: Date, category: string}>>([]);
 
-  // ✅ USING YOUR PRESET: enkomokazini-test
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inhi6kt';
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
+  // ✅ FIXED: Using your exact preset - enkomokazini-test
+  const cloudName = 'dn2inhi6kt'; // Direct assignment from your screenshot
+  const uploadPreset = 'enkomokazini-test'; // Direct assignment of your preset
 
   useEffect(() => {
     console.log('🔧 Cloudinary Config:', {
       cloudName,
       uploadPreset,
-      hasCloudName: !!cloudName,
-      hasUploadPreset: !!uploadPreset,
-      mode: import.meta.env.MODE,
-      envVars: {
-        CLOUDINARY_CLOUD_NAME: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
-        CLOUDINARY_UPLOAD_PRESET: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
-      }
+      mode: import.meta.env.MODE
     });
     
     checkCloudinaryConnection();
@@ -74,108 +68,84 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  // ✅ ENHANCED: Cloudinary connection check
+  // ✅ FIXED: Simplified and reliable Cloudinary connection check
   const checkCloudinaryConnection = async () => {
     try {
-      if (!cloudName) {
-        console.warn('⚠️ Cloudinary cloud name not set');
-        toast({
-          title: "Cloudinary Configuration Missing",
-          description: "Please set VITE_CLOUDINARY_CLOUD_NAME in your .env file",
-          variant: "destructive"
-        });
-        setCloudinaryStatus('unavailable');
-        return;
-      }
-      
-      if (!uploadPreset) {
-        console.warn('⚠️ Cloudinary upload preset not set');
-        toast({
-          title: "Upload Preset Missing",
-          description: "Please set VITE_CLOUDINARY_UPLOAD_PRESET in your .env file",
-          variant: "destructive"
-        });
-        setCloudinaryStatus('unavailable');
-        return;
-      }
-      
       console.log('🔍 Testing Cloudinary connection...');
       
-      // Test 1: Check if cloud exists
-      const testResponse = await fetch(`https://res.cloudinary.com/${cloudName}/image/upload/v1700000000/sample.jpg`, {
-        method: 'HEAD',
-        mode: 'cors'
+      // Create a tiny test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#4F46E5';
+        ctx.fillRect(0, 0, 2, 2);
+      }
+      
+      const blob = await new Promise<Blob | null>((resolve) => 
+        canvas.toBlob(resolve, 'image/png')
+      );
+      
+      if (!blob) throw new Error('Could not create test image');
+      
+      const formData = new FormData();
+      formData.append('file', blob, 'test.png');
+      formData.append('upload_preset', uploadPreset);
+      formData.append('tags', 'enkomokazini_test');
+      
+      console.log('Testing upload preset:', uploadPreset);
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+        method: 'POST',
+        body: formData,
       });
       
-      if (testResponse.ok || testResponse.status === 404) {
-        console.log('✅ Cloudinary cloud accessible');
+      const responseText = await response.text();
+      console.log('Cloudinary response status:', response.status);
+      console.log('Cloudinary response:', responseText);
+      
+      if (response.ok) {
+        const result = JSON.parse(responseText);
+        console.log('✅ Cloudinary connected! URL:', result.secure_url);
+        setCloudinaryStatus('available');
         
-        // Test 2: Test upload preset with a tiny image
-        const canvas = document.createElement('canvas');
-        canvas.width = 2;
-        canvas.height = 2;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#4F46E5';
-          ctx.fillRect(0, 0, 2, 2);
-        }
-        
-        const blob = await new Promise<Blob | null>((resolve) => 
-          canvas.toBlob(resolve, 'image/png')
-        );
-        
-        if (!blob) throw new Error('Could not create test image');
-        
-        const formData = new FormData();
-        formData.append('file', blob, 'test.png');
-        formData.append('upload_preset', uploadPreset);
-        formData.append('tags', 'enkomokazini_test_connection');
-        
-        console.log('Testing upload preset:', uploadPreset);
-        
-        const testUpload = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
-          method: 'POST',
-          body: formData,
+        toast({
+          title: "Cloudinary Connected",
+          description: `Ready to upload images using "${uploadPreset}" preset`,
         });
-        
-        if (testUpload.ok) {
-          const result = await testUpload.json();
-          console.log('✅ Upload preset working:', result.secure_url);
-          setCloudinaryStatus('available');
-          
-          toast({
-            title: "Cloudinary Connected",
-            description: `Using preset: ${uploadPreset}`,
-          });
-        } else {
-          const errorText = await testUpload.text();
-          console.error('❌ Upload preset test failed:', testUpload.status, errorText);
-          
-          let errorMessage = `Upload preset "${uploadPreset}" failed`;
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorMessage = errorJson.error?.message || errorMessage;
-          } catch {}
-          
-          throw new Error(errorMessage);
-        }
       } else {
-        throw new Error(`Cloud check failed: ${testResponse.status}`);
+        console.error('❌ Cloudinary test failed:', response.status);
+        
+        let errorMessage = `Upload failed (${response.status})`;
+        try {
+          const errorJson = JSON.parse(responseText);
+          errorMessage = errorJson.error?.message || errorMessage;
+          
+          // Specific error messages
+          if (errorMessage.includes('upload preset') || errorMessage.includes('preset')) {
+            errorMessage = `Preset "${uploadPreset}" not found. Please check Cloudinary settings.`;
+          } else if (errorMessage.includes('credentials')) {
+            errorMessage = 'Invalid cloud name. Check your Cloudinary account.';
+          }
+        } catch {}
+        
+        throw new Error(errorMessage);
       }
       
     } catch (error: any) {
-      console.error('❌ Cloudinary connection check failed:', error);
+      console.error('❌ Cloudinary connection failed:', error);
       setCloudinaryStatus('unavailable');
       
       toast({
         title: "Cloudinary Unavailable",
-        description: error.message || "Using local storage for images",
+        description: error.message || "Cannot connect to Cloudinary",
         variant: "destructive"
       });
     }
   };
 
-  // ✅ CONSISTENT & RELIABLE: Unified file upload handler
+  // ✅ FIXED: Reliable file upload handler
   const uploadFile = async (
     file: File,
     category: 'team' | 'sponsor' | 'hero' | 'school',
@@ -221,44 +191,40 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       formData.append('file', file);
       formData.append('upload_preset', uploadPreset);
       
-      // Add folder organization based on category
+      // Add organization
       formData.append('folder', `enkomokazini/${category}`);
       formData.append('tags', `enkomokazini,${category}`);
       
-      // Add public ID for easier reference
-      const publicId = `${category}_${Date.now()}_${fileName || file.name.replace(/\.[^/.]+$/, "")}`;
+      // Generate a unique public ID
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(7);
+      const publicId = `${category}_${timestamp}_${random}`;
       formData.append('public_id', publicId);
-      
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
       
       console.log('📤 Uploading to Cloudinary:', {
         cloudName,
         uploadPreset,
         file: file.name,
         category,
-        fileName,
-        publicId,
-        uploadUrl
+        publicId
       });
       
-      const response = await fetch(uploadUrl, {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
         method: 'POST',
         body: formData,
       });
       
+      const responseText = await response.text();
+      console.log('Upload response status:', response.status);
+      console.log('Upload response:', responseText);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ HTTP Error:', response.status, errorText);
+        console.error('❌ Cloudinary upload failed:', response.status, responseText);
         
-        let errorMessage = `HTTP ${response.status}`;
+        let errorMessage = `Upload failed (${response.status})`;
         try {
-          const errorJson = JSON.parse(errorText);
+          const errorJson = JSON.parse(responseText);
           errorMessage = errorJson.error?.message || errorMessage;
-          
-          // Handle specific Cloudinary errors
-          if (errorJson.error && errorJson.error.message.includes('Upload preset')) {
-            errorMessage = `Upload preset "${uploadPreset}" not found or misconfigured`;
-          }
         } catch {}
         
         toast({
@@ -272,7 +238,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         return dataUrl;
       }
       
-      const result: CloudinaryUploadResponse = await response.json();
+      const result: CloudinaryUploadResponse = JSON.parse(responseText);
       
       if (result.error) {
         console.error('❌ Cloudinary error:', result.error.message);
@@ -294,7 +260,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       
       toast({
         title: "Upload successful!",
-        description: `Uploaded to Cloudinary using preset: ${uploadPreset}`,
+        description: "Image uploaded to Cloudinary",
       });
       
       return result.secure_url;
@@ -368,18 +334,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ TEST: Cloudinary upload test
+  // ✅ FIXED: Better test function
   const quickTest = async () => {
     console.log('🧪 Testing Cloudinary with preset:', uploadPreset);
-    
-    if (!cloudName || !uploadPreset) {
-      toast({
-        title: "❌ Configuration missing",
-        description: "Please set Cloudinary environment variables",
-        variant: "destructive"
-      });
-      return;
-    }
     
     setIsUploading(true);
     
@@ -404,7 +361,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         ctx.textAlign = 'center';
         ctx.fillText('TEST', 50, 50);
         ctx.font = '10px Arial';
-        ctx.fillText(uploadPreset, 50, 70);
+        ctx.fillText(new Date().toLocaleTimeString(), 50, 70);
       }
       
       const blob = await new Promise<Blob | null>((resolve) => 
@@ -422,23 +379,24 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       
       const imageUrl = await uploadFile(file, 'school', 'test_image');
       
-      // Verify the URL is accessible
-      const verifyResponse = await fetch(imageUrl, { method: 'HEAD' });
-      
-      if (verifyResponse.ok) {
+      // Verify the URL
+      const img = new Image();
+      img.onload = () => {
         toast({
           title: "✅ Cloudinary Test Successful",
           description: `Preset "${uploadPreset}" is working!`,
         });
         console.log('Test image URL:', imageUrl);
         
-        // Open image in new tab for verification
-        setTimeout(() => {
-          window.open(imageUrl, '_blank');
-        }, 500);
-      } else {
+        // Open image in new tab
+        window.open(imageUrl, '_blank');
+      };
+      
+      img.onerror = () => {
         throw new Error('Uploaded image not accessible');
-      }
+      };
+      
+      img.src = imageUrl;
       
     } catch (error: any) {
       console.error('Test failed:', error);
@@ -511,7 +469,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  // ✅ CONSISTENT: Hero images upload (multiple)
+  // Hero images upload
   const handleHeroImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -808,7 +766,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </button>
                 {cloudinaryStatus === 'unavailable' && (
                   <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-                    <strong>Note:</strong> Using local storage. Check your .env file and Cloudinary settings.
+                    <strong>Note:</strong> Check Cloudinary preset settings
                   </div>
                 )}
               </div>
@@ -819,18 +777,18 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
               <h3 className="text-sm font-medium text-amber-800 mb-1">Setup Required:</h3>
               <div className="text-sm text-amber-700 space-y-2">
-                <p>1. Ensure your <code>.env</code> file has:</p>
-                <pre className="mt-1 p-2 bg-amber-100 text-amber-800 rounded text-xs overflow-x-auto">
-{`VITE_CLOUDINARY_CLOUD_NAME=dn2inhi6kt
-VITE_CLOUDINARY_UPLOAD_PRESET=enkomokazini-test`}
-                </pre>
-                <p>2. Verify in Cloudinary Dashboard:</p>
+                <p>1. Verify in Cloudinary Dashboard:</p>
                 <ul className="ml-4 list-disc text-xs">
-                  <li>Go to Settings → Upload</li>
-                  <li>Find preset "<code>enkomokazini-test</code>"</li>
-                  <li>Ensure it's enabled and "unsigned"</li>
-                  <li>Check folder permissions</li>
+                  <li>Go to <strong>Settings → Upload</strong></li>
+                  <li>Find preset <code>enkomokazini-test</code></li>
+                  <li>Ensure it's <strong>enabled</strong> and <strong>unsigned</strong></li>
+                  <li>Check "Auto-create folders" is enabled</li>
                 </ul>
+                <p>2. Current configuration:</p>
+                <pre className="mt-1 p-2 bg-amber-100 text-amber-800 rounded text-xs overflow-x-auto">
+{`Cloud Name: ${cloudName}
+Upload Preset: ${uploadPreset}`}
+                </pre>
               </div>
             </div>
           )}
