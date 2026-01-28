@@ -43,23 +43,61 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  const uploadImage = async (file: File) => {
+const uploadImage = async (file: File) => {
+    // Validate file exists and is an image
+    if (!file || !file.type.startsWith('image/')) {
+        console.error('Invalid file type. Please upload an image.');
+        return await fileToDataUrl(file);
+    }
+    
+    // Check file size if needed (e.g., limit to 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        console.error('File too large. Maximum size is 5MB.');
+        return await fileToDataUrl(file);
+    }
+
     // try server upload first
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const headers: any = {};
-      if (serverToken) headers["x-admin-token"] = serverToken;
-      const res = await fetch("/api/upload", { method: "POST", body: fd, headers });
-      if (res.ok) {
-        const json = await res.json();
-        return json.url as string;
-      }
+        const fd = new FormData();
+        fd.append("file", file);
+        
+        const headers: Record<string, string> = {};
+        if (serverToken) {
+            headers["x-admin-token"] = serverToken;
+        }
+        
+        // Add content-type for FormData (browser will set this automatically with boundary)
+        // headers["Content-Type"] = "multipart/form-data"; // Don't set this manually
+        
+        const res = await fetch("/api/upload", { 
+            method: "POST", 
+            body: fd, 
+            headers 
+        });
+        
+        if (res.ok) {
+            const json = await res.json();
+            
+            // Validate response has URL
+            if (json && json.url) {
+                return json.url as string;
+            } else {
+                console.error('Server response missing URL field:', json);
+                throw new Error('Invalid server response');
+            }
+        } else {
+            // Log server error details
+            console.error(`Upload failed with status ${res.status}: ${res.statusText}`);
+            const errorText = await res.text();
+            console.error('Server error response:', errorText);
+            throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
+        }
     } catch (e) {
-      // fallback to data URL
+        // fallback to data URL
+        console.error('Upload failed, falling back to data URL:', e);
+        return await fileToDataUrl(file);
     }
-    return await fileToDataUrl(file);
-  };
+};
 
   const handleSave = async () => {
     // ensure arrays
@@ -104,7 +142,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const urls: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      urls.push(await uploadImage(t));
+      urls.push(await uploadImage(f));
     }
     setEditing({ ...editing, heroImages: urls });
   };
