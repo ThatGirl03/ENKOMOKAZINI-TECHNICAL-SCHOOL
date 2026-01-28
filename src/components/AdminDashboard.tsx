@@ -90,7 +90,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           folder = 'enkomokazini/';
       }
       
-      const publicId = `${safeName}_${timestamp}_${random}`;
+      const publicId = `${folder}${safeName}_${timestamp}_${random}`;
       
       // Create form data for Cloudinary unsigned upload
       const formData = new FormData();
