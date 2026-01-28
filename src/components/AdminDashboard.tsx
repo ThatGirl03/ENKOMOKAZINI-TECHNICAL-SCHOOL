@@ -19,8 +19,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [isUploading, setIsUploading] = useState(false);
 
   // Cloudinary configuration - HARDCODED
-  const cloudName = 'dn2inh6kt';
-  const uploadPreset = 'enkomokazini-signed-upload';
+ // Cloudinary configuration - HARDCODED
+const cloudName = 'dn2inh6kt';
+const uploadPreset = 'enkomokazini-signed-upload';
 
   useEffect(() => {
     const onUpdate = (e: any) => {
