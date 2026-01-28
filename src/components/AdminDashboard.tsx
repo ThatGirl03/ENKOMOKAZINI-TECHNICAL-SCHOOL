@@ -16,7 +16,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [data, setData] = useState<SiteData>(loadSiteData());
   const [editing, setEditing] = useState<Partial<SiteData>>(data);
   const { toast } = useToast();
-  const [serverToken, setServerToken] = useState<string>("");
+  const [serverToken, setServerToken] = useState<string>("tech2026SINGAWE"); // Pre-fill with your token
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
@@ -39,7 +39,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   }, []);
 
   useEffect(() => {
-    const onUpdate = (e: any) => setData(e?.detail || loadSiteData());
+    const onUpdate = (e: any) => {
+      const updatedData = e?.detail || loadSiteData();
+      setData(updatedData);
+      // Also update editing state to stay in sync
+      setEditing(updatedData);
+    };
     window.addEventListener("siteDataUpdated", onUpdate as EventListener);
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
@@ -97,7 +102,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       // Create timestamp for uniqueness
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 8);
-      const fileName = `${safeName}_${timestamp}_${random}.${fileExt}`;
+      const fileName = `${safeName}_${timestamp}_${random}`;
       
       // Determine folder based on type - UPDATED TO MATCH YOUR STRUCTURE
       let folderPath = '';
@@ -109,7 +114,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           folderPath = '/assets/';  // Store sponsor logos in root of assets
           break;
         case 'hero':
-          folderPath = '/assets/';  // Store hero images in root of assets (or create /assets/Hero/ later)
+          folderPath = '/assets/';  // Store hero images in root of assets
           break;
         case 'school':
           folderPath = '/assets/';  // Where School Logo.jpeg already is
@@ -117,8 +122,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         default:
           folderPath = '/assets/';
       }
-      
-      const filePath = `${folderPath}${fileName}`;
 
       // Convert file to base64 for the API
       const base64Data = await fileToDataUrl(file);
@@ -133,6 +136,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             headers["x-admin-token"] = serverToken;
         }
         
+        console.log('Uploading image to API...');
         const res = await fetch("/api/upload", { 
             method: "POST", 
             headers,
@@ -144,46 +148,58 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             })
         });
         
+        const responseText = await res.text();
+        console.log('API Response:', responseText);
+        
+        let json;
+        try {
+          json = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Failed to parse JSON response:', responseText);
+          throw new Error('Invalid server response');
+        }
+        
         if (res.ok) {
-            const json = await res.json();
-            
             // Validate response has URL
             if (json && json.url) {
+                console.log('Upload successful, URL:', json.url);
                 toast({
-                  title: "Upload successful",
+                  title: "Upload successful!",
                   description: `Image saved to ${folderPath}`,
                 });
                 return json.url as string;
             } else if (json && json.filePath) {
                 // If server returns the file path, use it
+                console.log('Upload successful, filePath:', json.filePath);
                 toast({
-                  title: "Upload successful",
+                  title: "Upload successful!",
                   description: `Image saved to ${folderPath}`,
                 });
                 return json.filePath;
             } else {
                 console.error('Server response missing URL/FilePath field:', json);
-                throw new Error('Invalid server response');
+                throw new Error('Invalid server response: No URL returned');
             }
         } else {
             // Log server error details
-            console.error(`Upload failed with status ${res.status}: ${res.statusText}`);
-            const errorText = await res.text();
-            console.error('Server error response:', errorText);
+            console.error(`Upload failed with status ${res.status}:`, json);
             
-            // If server is not available, fall back to data URL but inform user
             toast({
               title: "Server upload failed",
-              description: "Using temporary image storage (data URL). Images will not persist after page refresh.",
+              description: json?.error || `Server error: ${res.status}`,
               variant: "destructive"
             });
             
-            throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
+            throw new Error(`Upload failed: ${res.status} ${json?.error || ''}`);
         }
       } catch (e) {
           // fallback to data URL with timestamp to make it unique
           console.log('Upload failed, falling back to data URL:', e);
           const dataUrl = await fileToDataUrl(file);
+          toast({
+            title: "Using temporary storage",
+            description: "Image saved locally (will not persist after refresh)",
+          });
           return dataUrl;
       }
     } finally {
@@ -195,13 +211,30 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setIsUploading(true);
     
     try {
-      // ensure arrays
-      const payload = { ...loadSiteData(), ...editing } as SiteData;
+      // Merge editing with current data and ensure all arrays exist
+      const currentData = loadSiteData();
+      const payload = { 
+        ...currentData, 
+        ...editing,
+        heroImages: editing.heroImages || currentData.heroImages || [],
+        team: editing.team || currentData.team || [],
+        sponsors: editing.sponsors || currentData.sponsors || [],
+        services: editing.services || currentData.services || []
+      } as SiteData;
+      
+      // Save locally first for immediate feedback
       const nextLocal = saveSiteData(payload);
       if (nextLocal) {
         setData(nextLocal as SiteData);
-        // Update editing state to match saved data
         setEditing(nextLocal as SiteData);
+        
+        // Trigger update event for preview components
+        window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: nextLocal }));
+        
+        toast({
+          title: "Saved locally",
+          description: "Changes saved to browser storage",
+        });
       }
 
       // try to save to server
@@ -213,20 +246,31 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             headers,
             body: JSON.stringify(payload),
           });
+          
         if (res.ok) {
-          toast({ title: "Saved", description: "Changes saved to server and local storage." });
           const next = await res.json();
           // sync
           saveSiteData(next);
           window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: next }));
           setData(next as SiteData);
           setEditing(next as SiteData);
+          
+          toast({ 
+            title: "Saved to server", 
+            description: "Changes synced to server and local storage." 
+          });
         } else {
-          toast({ title: "Saved locally", description: "Server not available, changes saved in browser." });
+          console.log('Server save optional - using local only');
         }
       } catch (e) {
-        toast({ title: "Saved locally", description: "Server not available, changes saved in browser." });
+        console.log('Server save optional - using local only');
       }
+    } catch (error) {
+      toast({
+        title: "Save failed",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsUploading(false);
     }
@@ -237,6 +281,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const sd = loadSiteData();
     setData(sd);
     setEditing(sd);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: sd }));
+    
     toast({
       title: "Data reset",
       description: "All data has been reset to default values.",
@@ -263,7 +309,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         urls.push(url);
       }
       
-      // Update both editing state and immediately save to local storage for preview
+      // Update editing state
       setEditing({ ...editing, heroImages: urls });
       
       // Also immediately update the data state for preview
@@ -290,7 +336,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   // Team editors
   const addTeamMember = () => {
     const t = editing.team ? [...editing.team] : [];
-    t.push({ name: "New Member", role: "", initials: "", image: "" });
+    t.push({ name: "New Member", role: "Team Role", initials: "NM", image: "" });
     setEditing({ ...editing, team: t });
   };
   
@@ -299,11 +345,13 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
     
-    // Also update data state for immediate preview
+    // Also immediately update the data state for preview
     const updatedData = { ...data };
     if (!updatedData.team) updatedData.team = [];
     updatedData.team[index] = { ...updatedData.team[index], ...value };
     setData(updatedData);
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeTeamMember = (index: number) => {
@@ -321,24 +369,15 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const url = await uploadImage(file, 'team', memberName);
       updateTeamMember(index, { image: url });
-      
-      toast({
-        title: "Team image uploaded",
-        description: `Image uploaded to /assets/Team/ folder`,
-      });
     } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload team member image",
-        variant: "destructive"
-      });
+      // Error handled in uploadImage function
     }
   };
 
   // Sponsors editors
   const addSponsor = () => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
-    s.push({ name: "New Sponsor", url: "", image: "" });
+    s.push({ name: "New Sponsor", url: "https://example.com", image: "" });
     setEditing({ ...editing, sponsors: s });
   };
   
@@ -347,11 +386,13 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
     
-    // Also update data state for immediate preview
+    // Also immediately update the data state for preview
     const updatedData = { ...data };
     if (!updatedData.sponsors) updatedData.sponsors = [];
     updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
     setData(updatedData);
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeSponsor = (index: number) => {
@@ -369,17 +410,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const url = await uploadImage(file, 'sponsor', sponsorName);
       updateSponsor(index, { image: url });
-      
-      toast({
-        title: "Sponsor logo uploaded",
-        description: `Logo uploaded to /assets/ folder`,
-      });
     } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload sponsor logo",
-        variant: "destructive"
-      });
+      // Error handled in uploadImage function
     }
   };
 
@@ -438,17 +470,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       saveSiteData(updatedData);
       setData(updatedData);
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
-      
-      toast({
-        title: "School image uploaded",
-        description: "Image uploaded to /assets/ folder",
-      });
     } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload school image",
-        variant: "destructive"
-      });
+      // Error handled in uploadImage function
     }
   };
 
@@ -464,6 +487,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     // If it's a relative path without leading slash, add it
     if (url.startsWith('assets/') || url.startsWith('public/')) {
       return `/${url}`;
+    }
+    
+    // If it's just a filename, assume it's in assets
+    if (url && !url.includes('/') && url.includes('.')) {
+      return `/assets/${url}`;
     }
     
     return url;
@@ -523,16 +551,15 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Server Token (optional)</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Server Token (required for permanent uploads)</label>
                 <input 
                   value={serverToken} 
                   onChange={(e)=>setServerToken(e.target.value)} 
-                  placeholder="x-admin-token for server" 
+                  placeholder="tech2026SINGAWE" 
                   className="w-full px-3 py-2 rounded border border-border bg-background" 
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Required for uploading images to server folders. 
-                  {!serverToken && " Add a token to save images permanently."}
+                  Token: <code className="bg-gray-100 px-1">tech2026SINGAWE</code> — Images save to server folders
                 </p>
               </div>
               
@@ -579,10 +606,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Images saved to: /assets/Team/
-                  {!serverToken && " (Add server token above to save permanently)"}
-                </p>
+                <p className="text-xs text-muted-foreground mb-2">Images saved to: <code>/assets/Team/</code></p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
@@ -656,10 +680,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Logos saved to: /assets/
-                  {!serverToken && " (Add server token above to save permanently)"}
-                </p>
+                <p className="text-xs text-muted-foreground mb-2">Logos saved to: <code>/assets/</code></p>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
                     <div key={idx} className="flex gap-2 items-center p-2 border border-border rounded">
@@ -729,10 +750,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Images saved to: /assets/
-                  {!serverToken && " (Add server token above to save permanently)"}
-                </p>
+                <p className="text-xs text-muted-foreground mb-2">Images saved to: <code>/assets/</code></p>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -771,10 +789,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Image saved to: /assets/
-                  {!serverToken && " (Add server token above to save permanently)"}
-                </p>
+                <p className="text-xs text-muted-foreground mb-2">Image saved to: <code>/assets/</code></p>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -903,29 +918,27 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   className="px-4 py-2 bg-accent text-accent-foreground rounded"
                   disabled={isUploading}
                 >
-                  {isUploading ? "Saving..." : "Save"}
+                  {isUploading ? "Saving..." : "Save All Changes"}
                 </button>
                 <button 
                   onClick={handleReset} 
                   className="px-4 py-2 bg-destructive text-destructive-foreground rounded"
                   disabled={isUploading}
                 >
-                  Reset
+                  Reset All
                 </button>
               </div>
               
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Important Note:</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-1">Debug Info:</h3>
                 <p className="text-xs text-blue-700">
-                  To save images permanently (not just as temporary data URLs), you need to:
+                  Check browser console (F12) for upload logs. Images should appear immediately in preview.
                 </p>
-                <ol className="text-xs text-blue-700 mt-1 ml-4 list-decimal">
-                  <li>Add a server token above</li>
-                  <li>Create the API endpoint at <code className="bg-blue-100 px-1">/pages/api/upload.ts</code></li>
-                  <li>Install dependencies if needed (formidable)</li>
-                </ol>
-                <p className="text-xs text-blue-700 mt-2">
-                  Without the API, images will only be saved temporarily in your browser.
+                <p className="text-xs text-blue-700 mt-1">
+                  API endpoint: <code className="bg-blue-100 px-1">/api/upload</code>
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Token: <code className="bg-blue-100 px-1">tech2026SINGAWE</code>
                 </p>
               </div>
             </div>
