@@ -11,12 +11,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Check for admin token (optional but recommended)
     const adminToken = req.headers['x-admin-token'] as string;
-    const expectedToken = process.env.ADMIN_TOKEN || 'your-secret-token-here';
+    const expectedToken = 'tech2026SINGAWE'; // Change this to match what you enter
     
-    // Uncomment to enable token checking:
-    // if (adminToken !== expectedToken) {
-    //   return res.status(401).json({ error: 'Unauthorized' });
-    // }
+    // Token checking is ENABLED:
+       if (adminToken !== expectedToken) {
+  return res.status(401).json({ 
+    error: 'Unauthorized',
+    message: 'Invalid or missing admin token'
+     });
+     }
 
     // Parse the request body
     const { imageData, filename, folder = '/assets/', type } = req.body;
