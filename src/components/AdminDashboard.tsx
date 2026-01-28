@@ -33,7 +33,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   // ✅ Use environment variables instead of hardcoding
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-signed-upload';
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
 
   useEffect(() => {
     const onUpdate = (e: CustomEvent) => {
@@ -46,141 +46,155 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  const uploadImage = async (
-    file: File, 
-    type: 'team' | 'sponsor' | 'hero' | 'school', 
-    name?: string
-  ): Promise<string> => {
-    setIsUploading(true);
+ const uploadImage = async (
+  file: File, 
+  type: 'team' | 'sponsor' | 'hero' | 'school', 
+  name?: string
+): Promise<string> => {
+  setIsUploading(true);
+  
+  try {
+    // Validate file
+    if (!file || !file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
     
-    try {
-      // Validate file
-      if (!file || !file.type.startsWith('image/')) {
-        toast({
-          title: "Invalid file",
-          description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-          variant: "destructive"
-        });
-        return await fileToDataUrl(file);
-      }
-      
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Maximum file size is 5MB",
-          variant: "destructive"
-        });
-        return await fileToDataUrl(file);
-      }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 5MB",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
 
-      // Generate a unique public ID
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 8);
-      let safeName = 'image';
+    // SIMPLIFIED - Remove all extra parameters
+    const folders = {
+      team: 'enkomokazini/team/',
+      sponsor: 'enkomokazini/sponsors/',
+      hero: 'enkomokazini/hero/',
+      school: 'enkomokazini/'
+    };
+
+    const folder = folders[type] || 'enkomokazini/';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    formData.append('folder', folder);
+    // ⚠️ REMOVE TAGS: formData.append('tags', `enkomokazini_${type}`);
+    
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+    
+    console.log('📤 Uploading to Cloudinary...', {
+      cloudName,
+      uploadPreset,
+      file: file.name,
+      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      folder
+    });
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    const result = await response.json();
+    
+    console.log('📥 Cloudinary Response:', result);
+    
+    if (response.ok && result.secure_url) {
+      console.log('✅ Cloudinary upload successful:', result.secure_url);
+      toast({
+        title: "Upload successful!",
+        description: `Image uploaded to ${folder}`,
+      });
       
-      if (name) {
-        safeName = name
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_+|_+$/g, '')
-          .substring(0, 50);
+      return result.secure_url;
+    } else {
+      console.error('❌ Cloudinary upload failed:', result);
+      
+      // Check if it's still showing unsigned error
+      if (result.error?.message?.includes('unsigned')) {
+        toast({
+          title: "Preset Mode Issue",
+          description: "Your preset appears to be in Unsigned mode. Please create a new Signed preset.",
+          variant: "destructive"
+        });
       }
       
-      // Clear, simple folder structure
-const folders = {
-  team: 'enkomokazini/team/',
-  sponsor: 'enkomokazini/sponsors/',
-  hero: 'enkomokazini/hero/',
-  school: 'enkomokazini/'
+      throw new Error(result.error?.message || 'Upload failed');
+    }
+    
+  } catch (error) {
+    console.error('❌ Upload error:', error);
+    
+    // Fallback to data URL
+    const dataUrl = await fileToDataUrl(file);
+    
+    toast({
+      title: "Saved locally",
+      description: "Image saved to browser storage",
+    });
+    
+    return dataUrl;
+  } finally {
+    setIsUploading(false);
+  }
 };
 
-const folder = folders[type] || 'enkomokazini/';
-
-const formData = new FormData();
-formData.append('file', file);
-formData.append('upload_preset', uploadPreset);
-formData.append('folder', folder); // This will work now!
-      
-      // For signed uploads, you can also add tags
-      formData.append('tags', `enkomokazini_${type}`);
-      
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-      
-      console.log('📤 Uploading to Cloudinary...', {
-        cloudName,
-        uploadPreset,
-        file: file.name,
-        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-        folder
-      });
-      
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const result: CloudinaryUploadResponse = await response.json();
-      
-      console.log('📥 Cloudinary Response:', result);
-      
-      if (response.ok && result.secure_url) {
-        console.log('✅ Cloudinary upload successful:', result.secure_url);
-        toast({
-          title: "Upload successful!",
-          description: `Image uploaded to Cloudinary ${folder}`,
-        });
-        
-        return result.secure_url;
-      } else {
-        console.error('❌ Cloudinary upload failed:', result);
-        
-        // Check specific error types
-        if (result.error?.message?.includes('unsigned')) {
-          toast({
-            title: "Upload preset configuration issue",
-            description: "Please ensure your Cloudinary preset is set to 'Signed' mode",
-            variant: "destructive"
-          });
-        } else if (result.error?.message?.includes('limit')) {
-          toast({
-            title: "Storage limit reached",
-            description: "Your Cloudinary storage may be full",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Upload failed",
-            description: result.error?.message || 'Unknown error occurred',
-            variant: "destructive"
-          });
-        }
-        
-        throw new Error(result.error?.message || 'Upload failed');
-      }
-      
-    } catch (error) {
-      console.error('❌ Upload error:', error);
-      
-      // Fallback to data URL
-      toast({
-        title: "Cloudinary upload failed",
-        description: "Using browser storage as fallback",
-        variant: "default"
-      });
-      
-      const dataUrl = await fileToDataUrl(file);
-      
-      toast({
-        title: "Saved locally",
-        description: "Image saved to browser storage",
-      });
-      
-      return dataUrl;
-    } finally {
-      setIsUploading(false);
+// Add this to your component temporarily
+const testCloudinary = async () => {
+  console.log('Testing Cloudinary connection...');
+  
+  const cloudName = 'dn2inh6kt';
+  const testPreset = 'enkomokazini-signed-upload';
+  
+  // Create a tiny test image
+  const canvas = document.createElement('canvas');
+  canvas.width = 10;
+  canvas.height = 10;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#4F46E5';
+  ctx.fillRect(0, 0, 10, 10);
+  
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  const file = new File([blob], 'test.png', { type: 'image/png' });
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', testPreset);
+  
+  try {
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    const result = await response.json();
+    console.log('Test Result:', result);
+    
+    if (result.secure_url) {
+      alert('✅ Cloudinary test successful!');
+    } else {
+      alert('❌ Test failed: ' + (result.error?.message || 'Unknown'));
     }
-  };
+  } catch (error) {
+    console.error('Test Error:', error);
+    alert('❌ Connection error: ' + error.message);
+  }
+};
+
+// Call this in browser console: testCloudinary()
+
+
+
+  
 
   const handleSave = async () => {
     setIsUploading(true);
