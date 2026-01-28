@@ -43,7 +43,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  const uploadImage = async (file: File) => {
+  const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
     // Validate file exists and is an image
     if (!file || !file.type.startsWith('image/')) {
         console.error('Invalid file type. Please upload an image.');
@@ -66,10 +66,62 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         return await fileToDataUrl(file);
     }
 
-    // try server upload first
+    // Get file extension
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
+    const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    if (!validExtensions.includes(fileExt)) {
+      toast({
+        title: "Invalid file format",
+        description: "Please upload JPG, PNG, GIF, WebP, or SVG files",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
+
+    // Generate a safe filename
+    let safeName = 'image';
+    if (name) {
+      // Remove special characters and spaces, convert to lowercase
+      safeName = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 50); // Limit length
+    }
+    
+    // Create timestamp for uniqueness
+    const timestamp = Date.now();
+    const fileName = `${safeName}_${timestamp}.${fileExt}`;
+    
+    // Determine folder based on type
+    let folderPath = '';
+    switch(type) {
+      case 'team':
+        folderPath = '/assets/teams/';
+        break;
+      case 'sponsor':
+        folderPath = '/assets/sponsors/';
+        break;
+      case 'hero':
+        folderPath = '/assets/hero/';
+        break;
+      case 'school':
+        folderPath = '/assets/';
+        break;
+      default:
+        folderPath = '/assets/';
+    }
+    
+    const filePath = `${folderPath}${fileName}`;
+
+    // try server upload first with folder information
     try {
         const fd = new FormData();
         fd.append("file", file);
+        fd.append("folder", folderPath);
+        fd.append("filename", fileName);
+        fd.append("type", type);
         
         const headers: Record<string, string> = {};
         if (serverToken) {
@@ -88,8 +140,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             // Validate response has URL
             if (json && json.url) {
                 return json.url as string;
+            } else if (json && json.filePath) {
+                // If server returns the file path, use it
+                return json.filePath;
             } else {
-                console.error('Server response missing URL field:', json);
+                console.error('Server response missing URL/FilePath field:', json);
                 throw new Error('Invalid server response');
             }
         } else {
@@ -97,12 +152,21 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             console.error(`Upload failed with status ${res.status}: ${res.statusText}`);
             const errorText = await res.text();
             console.error('Server error response:', errorText);
+            
+            // If server is not available, fall back to data URL but inform user
+            toast({
+              title: "Server upload failed",
+              description: "Using temporary image storage (data URL). Images will not persist after page refresh.",
+              variant: "destructive"
+            });
+            
             throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
         }
     } catch (e) {
-        // fallback to data URL
+        // fallback to data URL with timestamp to make it unique
         console.log('Upload failed, falling back to data URL:', e);
-        return await fileToDataUrl(file);
+        const dataUrl = await fileToDataUrl(file);
+        return dataUrl;
     }
   };
 
@@ -110,11 +174,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     // ensure arrays
     const payload = { ...loadSiteData(), ...editing } as SiteData;
     const nextLocal = saveSiteData(payload);
-    if (nextLocal) {
-      setData(nextLocal as SiteData);
-      // Update editing state to match saved data
-      setEditing(nextLocal as SiteData);
-    }
+    if (nextLocal) setData(nextLocal as SiteData);
 
     // try to save to server
     try {
@@ -132,7 +192,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         saveSiteData(next);
         window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: next }));
         setData(next as SiteData);
-        setEditing(next as SiteData);
       } else {
         toast({ title: "Saved locally", description: "Server not available, changes saved in browser." });
       }
@@ -150,43 +209,40 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files) return;
     
     const currentImages = editing.heroImages || data.heroImages || [];
     const urls: string[] = [...currentImages];
     
-    // Show loading toast
     toast({
-      title: "Uploading images...",
-      description: `Uploading ${files.length} image(s)`,
+      title: "Uploading hero images...",
+      description: `Uploading ${files.length} image(s) to /assets/hero/ folder`,
     });
     
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        const url = await uploadImage(f);
+        // Use index as name for hero images
+        const url = await uploadImage(f, 'hero', `hero_${urls.length + i + 1}`);
         urls.push(url);
       }
       
-      // Update both editing state and immediately save to local storage for preview
       setEditing({ ...editing, heroImages: urls });
       
       // Also immediately update the data state for preview
       const updatedData = { ...data, heroImages: urls };
       saveSiteData(updatedData);
       setData(updatedData);
-      
-      // Trigger update event for preview components
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
-        title: "Images uploaded",
-        description: `Added ${files.length} image(s) successfully`,
+        title: "Hero images uploaded",
+        description: `Added ${files.length} image(s) to /assets/hero/ folder`,
       });
     } catch (error) {
       toast({
         title: "Upload failed",
-        description: "Failed to upload some images",
+        description: "Failed to upload some hero images",
         variant: "destructive"
       });
     }
@@ -203,18 +259,48 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const t = editing.team ? [...editing.team] : [];
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
-    
-    // Also update data state for immediate preview
-    const updatedData = { ...data };
-    if (!updatedData.team) updatedData.team = [];
-    updatedData.team[index] = { ...updatedData.team[index], ...value };
-    setData(updatedData);
   };
   
   const removeTeamMember = (index: number) => {
     const t = editing.team ? [...editing.team] : [];
     t.splice(index, 1);
     setEditing({ ...editing, team: t });
+  };
+
+  const handleTeamImageUpload = async (index: number, file?: File) => {
+    if (!file) return;
+    
+    const teamMember = editing.team?.[index] || data.team?.[index];
+    const memberName = teamMember?.name || `member_${index + 1}`;
+    
+    toast({
+      title: "Uploading team member image...",
+      description: `Uploading image for ${memberName} to /assets/teams/ folder`,
+    });
+    
+    try {
+      const url = await uploadImage(file, 'team', memberName);
+      updateTeamMember(index, { image: url });
+      
+      // Also immediately update the data state for preview
+      const updatedData = { ...data };
+      if (!updatedData.team) updatedData.team = [];
+      updatedData.team[index] = { ...updatedData.team[index], image: url };
+      saveSiteData(updatedData);
+      setData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+      
+      toast({
+        title: "Team image uploaded",
+        description: `Image uploaded to /assets/teams/ folder`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload team member image",
+        variant: "destructive"
+      });
+    }
   };
 
   // Sponsors editors
@@ -228,12 +314,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
-    
-    // Also update data state for immediate preview
-    const updatedData = { ...data };
-    if (!updatedData.sponsors) updatedData.sponsors = [];
-    updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
-    setData(updatedData);
   };
   
   const removeSponsor = (index: number) => {
@@ -244,18 +324,35 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const handleSponsorImage = async (index: number, file?: File) => {
     if (!file) return;
+    
+    const sponsor = editing.sponsors?.[index] || data.sponsors?.[index];
+    const sponsorName = sponsor?.name || `sponsor_${index + 1}`;
+    
+    toast({
+      title: "Uploading sponsor image...",
+      description: `Uploading logo for ${sponsorName} to /assets/sponsors/ folder`,
+    });
+    
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, 'sponsor', sponsorName);
       updateSponsor(index, { image: url });
       
+      // Also immediately update the data state for preview
+      const updatedData = { ...data };
+      if (!updatedData.sponsors) updatedData.sponsors = [];
+      updatedData.sponsors[index] = { ...updatedData.sponsors[index], image: url };
+      saveSiteData(updatedData);
+      setData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+      
       toast({
-        title: "Sponsor image uploaded",
-        description: "Image uploaded successfully",
+        title: "Sponsor logo uploaded",
+        description: `Logo uploaded to /assets/sponsors/ folder`,
       });
     } catch (error) {
       toast({
         title: "Upload failed",
-        description: "Failed to upload sponsor image",
+        description: "Failed to upload sponsor logo",
         variant: "destructive"
       });
     }
@@ -306,8 +403,14 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const handleSchoolImage = async (file?: File) => {
     if (!file) return;
+    
+    toast({
+      title: "Uploading school image...",
+      description: "Uploading school image to /assets/ folder",
+    });
+    
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, 'school', 'school_image');
       setEditing({ ...editing, schoolImage: url });
       
       // Also immediately update the data state for preview
@@ -318,7 +421,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       
       toast({
         title: "School image uploaded",
-        description: "Image uploaded successfully",
+        description: "Image uploaded to /assets/ folder",
       });
     } catch (error) {
       toast({
@@ -330,11 +433,20 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   // Helper function to get image source with fallback
-  const getImageSrc = (url: string | undefined, fallbackUrl?: string): string => {
-    if (url && (url.startsWith('http') || url.startsWith('data:image'))) {
+  const getImageSrc = (url: string | undefined): string => {
+    if (!url) return '';
+    
+    // If it's already a proper path (starts with /) or data URL, return as is
+    if (url.startsWith('/') || url.startsWith('data:image') || url.startsWith('http')) {
       return url;
     }
-    return fallbackUrl || '';
+    
+    // If it's a relative path without leading slash, add it
+    if (url.startsWith('assets/') || url.startsWith('public/')) {
+      return `/${url}`;
+    }
+    
+    return url;
   };
 
   return (
@@ -372,7 +484,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Server Token (optional)</label>
                 <input value={serverToken} onChange={(e)=>setServerToken(e.target.value)} placeholder="x-admin-token for server" className="w-full px-3 py-2 rounded border border-border bg-background" />
+                <p className="text-xs text-muted-foreground mt-1">Required for uploading images to server folders</p>
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Name</label>
                 <input value={editing.schoolName || ""} onChange={(e)=>setEditing({...editing, schoolName: e.target.value})} className="w-full px-3 py-2 rounded border border-border bg-background" />
@@ -416,11 +530,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
+                <p className="text-xs text-muted-foreground mb-2">Images saved to: /public/assets/teams/</p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center">
+                      <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
+                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0">
                           {m.image ? (
                             <img 
                               src={getImageSrc(m.image)} 
@@ -445,17 +560,27 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                           )}
                         </div>
                         <div className="flex-1 grid grid-cols-2 gap-2">
-                          <input value={m.name} onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} className="px-2 py-2 rounded border border-border bg-background" />
-                          <input value={m.role} onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} className="px-2 py-2 rounded border border-border bg-background" />
+                          <div>
+                            <label className="text-xs text-muted-foreground">Name</label>
+                            <input value={m.name} onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} className="w-full px-2 py-1 rounded border border-border bg-background" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground">Role</label>
+                            <input value={m.role} onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} className="w-full px-2 py-1 rounded border border-border bg-background" />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input type="file" accept="image/*" onChange={async (e)=>{ 
-                            if(e.target.files && e.target.files[0]){ 
-                              const url = await uploadImage(e.target.files[0]); 
-                              updateTeamMember(idx, { image: url }); 
-                            } 
-                          }} />
-                          <button onClick={()=>removeTeamMember(idx)} className="px-2 py-1 bg-destructive text-destructive-foreground rounded">Remove</button>
+                        <div className="flex flex-col items-center gap-1">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={async (e)=>{ 
+                              if(e.target.files && e.target.files[0]){ 
+                                await handleTeamImageUpload(idx, e.target.files[0]); 
+                              } 
+                            }} 
+                            className="text-xs w-32"
+                          />
+                          <button onClick={()=>removeTeamMember(idx)} className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs">Remove</button>
                         </div>
                       </div>
                     ))}
@@ -466,17 +591,55 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
+                <p className="text-xs text-muted-foreground mb-2">Logos saved to: /public/assets/sponsors/</p>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <input value={s.name} onChange={(e)=>updateSponsor(idx, { name: e.target.value })} className="flex-1 px-2 py-2 rounded border border-border bg-background" />
-                      <input value={s.url || ""} onChange={(e)=>updateSponsor(idx, { url: e.target.value })} className="w-48 px-2 py-2 rounded border border-border bg-background" />
-                      <input type="file" accept="image/*" onChange={async (e)=>{ 
-                        if(e.target.files && e.target.files[0]) {
-                          await handleSponsorImage(idx, e.target.files[0]); 
-                        } 
-                      }} />
-                      <button onClick={()=>removeSponsor(idx)} className="px-3 py-2 bg-destructive text-destructive-foreground rounded">Remove</button>
+                    <div key={idx} className="flex gap-2 items-center p-2 border border-border rounded">
+                      <div className="w-16 h-16 rounded border border-border overflow-hidden bg-gray-50 flex items-center justify-center flex-shrink-0">
+                        {s.image ? (
+                          <img 
+                            src={getImageSrc(s.image)} 
+                            alt={s.name} 
+                            className="w-full h-full object-contain p-1"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.style.display = 'none';
+                              const parent = img.parentElement;
+                              if (parent) {
+                                const span = document.createElement('span');
+                                span.className = 'text-gray-400 text-xs';
+                                span.textContent = 'Logo';
+                                parent.appendChild(span);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs">Logo</span>
+                        )}
+                      </div>
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Name</label>
+                          <input value={s.name} onChange={(e)=>updateSponsor(idx, { name: e.target.value })} className="w-full px-2 py-1 rounded border border-border bg-background" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Website</label>
+                          <input value={s.url || ""} onChange={(e)=>updateSponsor(idx, { url: e.target.value })} className="w-full px-2 py-1 rounded border border-border bg-background" placeholder="https://..." />
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]) {
+                              await handleSponsorImage(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-xs w-32"
+                        />
+                        <button onClick={()=>removeSponsor(idx)} className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs">Remove</button>
+                      </div>
                     </div>
                   ))}
                   <button onClick={addSponsor} className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded">Add Sponsor</button>
@@ -485,39 +648,52 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
-                <input type="file" accept="image/*" multiple onChange={handleFileUpload} />
+                <p className="text-xs text-muted-foreground mb-2">Images saved to: /public/assets/hero/</p>
+                <input type="file" accept="image/*" multiple onChange={handleFileUpload} className="w-full" />
                 <div className="mt-2 flex gap-2 flex-wrap">
                   {(editing.heroImages || data.heroImages || []).map((u, i)=> (
-                    <img 
-                      key={i} 
-                      src={getImageSrc(u)} 
-                      alt={`hero-${i}`} 
-                      className="h-20 w-32 object-cover rounded border border-border"
-                      onError={(e) => {
-                        // If image fails to load, show a placeholder
-                        const img = e.target as HTMLImageElement;
-                        img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2Uge2krMX08L3RleHQ+PC9zdmc+';
-                      }}
-                    />
+                    <div key={i} className="relative">
+                      <img 
+                        src={getImageSrc(u)} 
+                        alt={`hero-${i}`} 
+                        className="h-20 w-32 object-cover rounded border border-border"
+                        onError={(e) => {
+                          // If image fails to load, show a placeholder
+                          const img = e.target as HTMLImageElement;
+                          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2Uge2krMX08L3RleHQ+PC9zdmc+';
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const currentImages = editing.heroImages || data.heroImages || [];
+                          const newImages = [...currentImages];
+                          newImages.splice(i, 1);
+                          setEditing({ ...editing, heroImages: newImages });
+                        }}
+                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(editing.heroImages || data.heroImages || []).length} images uploaded
+                  {(editing.heroImages || data.heroImages || []).length} images in /assets/hero/
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
+                <p className="text-xs text-muted-foreground mb-2">Image saved to: /public/assets/</p>
                 <input type="file" accept="image/*" onChange={async (e)=>{ 
                   if(e.target.files && e.target.files[0]) {
                     await handleSchoolImage(e.target.files[0]); 
                   } 
-                }} />
+                }} className="w-full" />
                 <div className="mt-2">
                   <img 
                     src={getImageSrc(
-                      editing.schoolImage || data.schoolImage, 
-                      editing.heroImages?.[0] || data.heroImages?.[0] || ''
+                      editing.schoolImage || data.schoolImage || (data.heroImages && data.heroImages[0])
                     )} 
                     alt="school" 
                     className="h-28 w-full object-cover rounded border border-border"
