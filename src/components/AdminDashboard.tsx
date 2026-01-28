@@ -19,8 +19,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [isUploading, setIsUploading] = useState(false);
 
   // Cloudinary configuration
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-signed-upload';
+  const cloudName = 'dn2inh6kt';
+  const uploadPreset = 'enkomokazini-signed-upload';
 
   useEffect(() => {
     const onUpdate = (e: any) => {
@@ -95,8 +95,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       // IMPORTANT: For signed uploads, DO NOT set public_id or folder here
       // Cloudinary will use the preset's settings
       
-     const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
-formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+     const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+formData.append('upload_preset', uploadPreset);
       
       console.log('📤 Uploading to Cloudinary...', {
         cloudName: CLOUDINARY_CLOUD_NAME,
