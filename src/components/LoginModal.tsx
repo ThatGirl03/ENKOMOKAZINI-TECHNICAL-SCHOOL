@@ -20,7 +20,7 @@ export const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
 
     // Simple authentication: use environment variables for credentials
     const validUsername = import.meta.env.VITE_ADMIN_USERNAME ?? "enkomokazini";
-    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD ?? "";
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD ?? "@techhigh2026";
 
     if (username.toLowerCase() === String(validUsername).toLowerCase() && password === String(validPassword)) {
       toast({
