@@ -5,7 +5,7 @@
   "installCommand": "npm install",
   "framework": "vite",
   "env": {
-    "VITE_CLOUDINARY_CLOUD_NAME": "@vite_cloudinary_cloud_name",
-    "VITE_CLOUDINARY_UPLOAD_PRESET": "@vite_cloudinary_upload_preset"
+    "VITE_CLOUDINARY_CLOUD_NAME": "dn2inh6kt",
+    "VITE_CLOUDINARY_UPLOAD_PRESET": "enkomokazini-signed-upload"
   }
 }
