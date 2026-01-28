@@ -35,13 +35,30 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
+ const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
   setIsUploading(true);
   
   try {
-    // ... validation code ...
+    // Validate file
+    if (!file || !file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 5MB",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
 
-    // Generate a unique public ID WITH folder
+    // Generate a unique public ID
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     let safeName = 'image';
@@ -73,50 +90,72 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         folder = 'enkomokazini/';
     }
     
-    // FIXED: Include folder in public_id
     const publicId = `${folder}${safeName}_${timestamp}_${random}`;
     
-    // Create form data for Cloudinary unsigned upload
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'enkomokazini-admin-upload');
-    formData.append('public_id', publicId);
-    // REMOVE this line - it's causing issues:
-    // formData.append('folder', folder);
+    console.log('📤 Preparing signed upload...', { publicId });
     
-    // Upload to Cloudinary
-    const cloudName = 'dn2inh6kt';
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+    // FIRST: Get a signature from YOUR SERVER
+    // Since you don't have a server, we'll use a workaround...
     
-    console.log('📤 Uploading to Cloudinary:', {
-      cloudName,
-      preset: 'enkomokazini-admin-upload',
-      publicId,
-      file: file.name,
-      size: file.size
-    });
+    // WORKAROUND: Use Cloudinary's Upload Widget (easiest solution)
+    // OR use Cloudinary's client-side signed upload with API key/secret
     
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
+    // For now, let's use the Upload Widget approach:
     
-    const result = await response.json();
-    
-    console.log('📥 Cloudinary Response:', result);
-    
-    if (response.ok && result.secure_url) {
-      console.log('✅ Cloudinary upload successful:', result.secure_url);
-      toast({
-        title: "Upload successful!",
-        description: `Image uploaded to Cloudinary`,
+    // Load Cloudinary Upload Widget script
+    const loadScript = () => {
+      return new Promise((resolve) => {
+        if (window.cloudinary) {
+          resolve(true);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://upload-widget.cloudinary.com/global/all.js';
+        script.onload = () => resolve(true);
+        document.head.appendChild(script);
       });
+    };
+    
+    await loadScript();
+    
+    // Use Cloudinary Upload Widget for signed uploads
+    return new Promise((resolve, reject) => {
+      const widget = window.cloudinary.createUploadWidget(
+        {
+          cloudName: 'dn2inh6kt',
+          uploadPreset: 'enkomokazini-admin-upload', // This should be SIGNED
+          sources: ['local'],
+          multiple: false,
+          folder: folder,
+          publicId: publicId,
+          clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+          maxFileSize: 5000000, // 5MB
+        },
+        (error: any, result: any) => {
+          if (error) {
+            console.error('❌ Widget error:', error);
+            reject(error);
+            return;
+          }
+          
+          if (result && result.event === 'success') {
+            console.log('✅ Widget upload success:', result.info.secure_url);
+            toast({
+              title: "Upload successful!",
+              description: "Image uploaded to Cloudinary",
+            });
+            resolve(result.info.secure_url);
+          }
+          
+          if (result && result.event === 'close') {
+            // User closed the widget
+            reject(new Error('Upload cancelled'));
+          }
+        }
+      );
       
-      return result.secure_url;
-    } else {
-      console.error('❌ Cloudinary upload failed:', result);
-      throw new Error(result.error?.message || `Upload failed: ${JSON.stringify(result)}`);
-    }
+      widget.open();
+    });
     
   } catch (error) {
     console.error('❌ Upload error:', error);
