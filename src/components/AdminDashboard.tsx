@@ -18,12 +18,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
 
-  // REMOVED: serverToken state - not needed for Cloudinary
-
-  useEffect(() => {
-    // REMOVED: API fetch - not needed for static deployment
-    // Just use localStorage data
-  }, []);
+  // Cloudinary configuration
+  const CLOUDINARY_CLOUD_NAME = 'dn2inh6kt';
+  const CLOUDINARY_UPLOAD_PRESET = 'enkomokazini-signed-upload'; // CHANGED TO SIGNED PRESET
 
   useEffect(() => {
     const onUpdate = (e: any) => {
@@ -35,147 +32,132 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
- const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
-  setIsUploading(true);
-  
-  try {
-    // Validate file
-    if (!file || !file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file",
-        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
+  const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
+    setIsUploading(true);
     
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
-
-    // Generate a unique public ID
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    let safeName = 'image';
-    if (name) {
-      safeName = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .substring(0, 50);
-    }
-    
-    // Determine folder based on type
-    let folder = '';
-    switch(type) {
-      case 'team':
-        folder = 'enkomokazini/team/';
-        break;
-      case 'sponsor':
-        folder = 'enkomokazini/sponsors/';
-        break;
-      case 'hero':
-        folder = 'enkomokazini/hero/';
-        break;
-      case 'school':
-        folder = 'enkomokazini/';
-        break;
-      default:
-        folder = 'enkomokazini/';
-    }
-    
-    const publicId = `${folder}${safeName}_${timestamp}_${random}`;
-    
-    console.log('📤 Preparing signed upload...', { publicId });
-    
-    // FIRST: Get a signature from YOUR SERVER
-    // Since you don't have a server, we'll use a workaround...
-    
-    // WORKAROUND: Use Cloudinary's Upload Widget (easiest solution)
-    // OR use Cloudinary's client-side signed upload with API key/secret
-    
-    // For now, let's use the Upload Widget approach:
-    
-    // Load Cloudinary Upload Widget script
-    const loadScript = () => {
-      return new Promise((resolve) => {
-        if (window.cloudinary) {
-          resolve(true);
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://upload-widget.cloudinary.com/global/all.js';
-        script.onload = () => resolve(true);
-        document.head.appendChild(script);
-      });
-    };
-    
-    await loadScript();
-    
-    // Use Cloudinary Upload Widget for signed uploads
-    return new Promise((resolve, reject) => {
-      const widget = window.cloudinary.createUploadWidget(
-        {
-          cloudName: 'dn2inh6kt',
-          uploadPreset: 'enkomokazini-admin-upload', // This should be SIGNED
-          sources: ['local'],
-          multiple: false,
-          folder: folder,
-          publicId: publicId,
-          clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-          maxFileSize: 5000000, // 5MB
-        },
-        (error: any, result: any) => {
-          if (error) {
-            console.error('❌ Widget error:', error);
-            reject(error);
-            return;
-          }
-          
-          if (result && result.event === 'success') {
-            console.log('✅ Widget upload success:', result.info.secure_url);
-            toast({
-              title: "Upload successful!",
-              description: "Image uploaded to Cloudinary",
-            });
-            resolve(result.info.secure_url);
-          }
-          
-          if (result && result.event === 'close') {
-            // User closed the widget
-            reject(new Error('Upload cancelled'));
-          }
-        }
-      );
+    try {
+      // Validate file
+      if (!file || !file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file",
+          description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
       
-      widget.open();
-    });
-    
-  } catch (error) {
-    console.error('❌ Upload error:', error);
-    toast({
-      title: "Upload failed",
-      description: error instanceof Error ? error.message : "Failed to upload image",
-      variant: "destructive"
-    });
-    
-    // Fallback to data URL
-    const dataUrl = await fileToDataUrl(file);
-    toast({
-      title: "Using temporary storage",
-      description: "Image saved locally (will not persist after refresh)",
-    });
-    return dataUrl;
-  } finally {
-    setIsUploading(false);
-  }
-};
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Maximum file size is 5MB",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
+
+      // Generate a unique public ID
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8);
+      let safeName = 'image';
+      if (name) {
+        safeName = name
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .substring(0, 50);
+      }
+      
+      // Determine folder based on type
+      let folder = '';
+      switch(type) {
+        case 'team':
+          folder = 'enkomokazini/team/';
+          break;
+        case 'sponsor':
+          folder = 'enkomokazini/sponsors/';
+          break;
+        case 'hero':
+          folder = 'enkomokazini/hero/';
+          break;
+        case 'school':
+          folder = 'enkomokazini/';
+          break;
+        default:
+          folder = 'enkomokazini/';
+      }
+      
+      // Create form data for Cloudinary upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      
+      // IMPORTANT: For signed uploads, DO NOT set public_id or folder here
+      // Cloudinary will use the preset's settings
+      
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
+      
+      console.log('📤 Uploading to Cloudinary...', {
+        cloudName: CLOUDINARY_CLOUD_NAME,
+        preset: CLOUDINARY_UPLOAD_PRESET,
+        file: file.name,
+        size: file.size,
+        folder: folder
+      });
+      
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      console.log('📥 Cloudinary Response:', result);
+      
+      if (response.ok && result.secure_url) {
+        console.log('✅ Cloudinary upload successful:', result.secure_url);
+        toast({
+          title: "Upload successful!",
+          description: `Image uploaded to Cloudinary`,
+        });
+        
+        return result.secure_url;
+      } else {
+        console.error('❌ Cloudinary upload failed:', result);
+        
+        // Check if it's a signed preset issue
+        if (result.error?.message?.includes('unsigned')) {
+          toast({
+            title: "Upload preset issue",
+            description: "Please ensure your Cloudinary preset is set to 'Signed' mode",
+            variant: "destructive"
+          });
+        }
+        
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Upload error:', error);
+      
+      // Fallback to simple data URL method
+      toast({
+        title: "Cloudinary upload failed",
+        description: "Using local storage instead",
+        variant: "destructive"
+      });
+      
+      const dataUrl = await fileToDataUrl(file);
+      toast({
+        title: "Saved locally",
+        description: "Image saved to browser storage",
+      });
+      
+      return dataUrl;
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsUploading(true);
@@ -477,8 +459,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             <h2 className="font-serif text-xl font-semibold text-foreground mb-4">Site Editor</h2>
 
             <div className="space-y-4">
-              {/* REMOVED: Server token section - not needed */}
-              
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Name</label>
                 <input value={editing.schoolName || ""} onChange={(e)=>setEditing({...editing, schoolName: e.target.value})} className="w-full px-3 py-2 rounded border border-border bg-background" />
@@ -851,7 +831,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   Cloud Name: <code className="bg-blue-100 px-1">dn2inh6kt</code>
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  Upload Preset: <code className="bg-blue-100 px-1">enkomokazini-admin-upload</code>
+                  Upload Preset: <code className="bg-blue-100 px-1">enkomokazini-signed-upload</code>
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  <strong>IMPORTANT:</strong> Make sure your preset is set to "Signed" mode in Cloudinary settings.
                 </p>
               </div>
             </div>
