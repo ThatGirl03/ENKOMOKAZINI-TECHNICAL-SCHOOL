@@ -1,4 +1,3 @@
-
 # Node modules
 node_modules/
 
@@ -11,6 +10,11 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+
+# Sensitive data
+*.env
 
 # Logs
 logs
