@@ -18,7 +18,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
 
-  // Cloudinary configuration
+  // Cloudinary configuration - HARDCODED
   const cloudName = 'dn2inh6kt';
   const uploadPreset = 'enkomokazini-signed-upload';
 
@@ -90,17 +90,17 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       // Create form data for Cloudinary upload
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('upload_preset', uploadPreset); // Fixed: using uploadPreset
       
       // IMPORTANT: For signed uploads, DO NOT set public_id or folder here
       // Cloudinary will use the preset's settings
       
-     const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-formData.append('upload_preset', uploadPreset);
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`; // Fixed: using cloudName
+      formData.append('upload_preset', uploadPreset); // Fixed: using uploadPreset
       
       console.log('📤 Uploading to Cloudinary...', {
-        cloudName: CLOUDINARY_CLOUD_NAME,
-        preset: CLOUDINARY_UPLOAD_PRESET,
+        cloudName: cloudName, // Fixed: using cloudName
+        preset: uploadPreset, // Fixed: using uploadPreset
         file: file.name,
         size: file.size,
         folder: folder
