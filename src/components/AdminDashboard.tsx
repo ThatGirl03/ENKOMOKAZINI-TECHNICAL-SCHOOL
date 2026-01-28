@@ -16,264 +16,130 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [data, setData] = useState<SiteData>(loadSiteData());
   const [editing, setEditing] = useState<Partial<SiteData>>(data);
   const { toast } = useToast();
-  const [serverToken, setServerToken] = useState<string>("tech2026SINGAWE"); // Pre-fill with your token
   const [isUploading, setIsUploading] = useState(false);
 
+  // REMOVED: serverToken state - not needed for Cloudinary
+
   useEffect(() => {
-    // try to fetch server data if available and sync to localStorage
-    (async () => {
-      try {
-        const res = await fetch("/api/data");
-        if (res.ok) {
-          const serverData = await res.json();
-          if (serverData) {
-            saveSiteData(serverData);
-            setEditing(serverData);
-            setData(serverData as SiteData);
-          }
-        }
-      } catch (e) {
-        // no server, continue with local data
-      }
-    })();
+    // REMOVED: API fetch - not needed for static deployment
+    // Just use localStorage data
   }, []);
 
   useEffect(() => {
     const onUpdate = (e: any) => {
       const updatedData = e?.detail || loadSiteData();
       setData(updatedData);
-      // Also update editing state to stay in sync
       setEditing(updatedData);
     };
     window.addEventListener("siteDataUpdated", onUpdate as EventListener);
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
- const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
-  setIsUploading(true);
-  
-  try {
-    // Validate file
-    if (!file || !file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file",
-        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
+  const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
+    setIsUploading(true);
     
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive"
-      });
-      return await fileToDataUrl(file);
-    }
-
-    // Generate a unique public ID
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    let safeName = 'image';
-    if (name) {
-      safeName = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .substring(0, 50);
-    }
-    
-    // Determine folder based on type
-    let folder = '';
-    switch(type) {
-      case 'team':
-        folder = 'enkomokazini/team/';
-        break;
-      case 'sponsor':
-        folder = 'enkomokazini/sponsors/';
-        break;
-      case 'hero':
-        folder = 'enkomokazini/hero/';
-        break;
-      case 'school':
-        folder = 'enkomokazini/';
-        break;
-      default:
-        folder = 'enkomokazini/';
-    }
-    
-    const publicId = `${folder}${safeName}_${timestamp}_${random}`;
-    
-    // Create form data for Cloudinary unsigned upload
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'enkomokazini_admin_upload'); // Your unsigned preset
-    formData.append('public_id', publicId);
-    formData.append('folder', folder);
-    
-    // Upload to Cloudinary
-    const cloudName = 'dn2inh6kt';
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
-    
-    console.log('Uploading to Cloudinary...', { publicId, folder });
-    
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
-    
-    const result = await response.json();
-    
-    if (response.ok && result.secure_url) {
-      console.log('Cloudinary upload successful:', result.secure_url);
-      toast({
-        title: "Upload successful!",
-        description: `Image uploaded to Cloudinary`,
-      });
+    try {
+      // Validate file
+      if (!file || !file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file",
+          description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
       
-      // Return the optimized URL
-      return result.secure_url;
-    } else {
-      console.error('Cloudinary upload failed:', result);
-      throw new Error(result.error?.message || 'Upload failed');
-    }
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    toast({
-      title: "Upload failed",
-      description: error instanceof Error ? error.message : "Failed to upload image",
-      variant: "destructive"
-    });
-    
-    // Fallback to data URL
-    const dataUrl = await fileToDataUrl(file);
-    toast({
-      title: "Using temporary storage",
-      description: "Image saved locally (will not persist after refresh)",
-    });
-    return dataUrl;
-  } finally {
-    setIsUploading(false);
-  }
-};
-      // Generate a safe filename
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Maximum file size is 5MB",
+          variant: "destructive"
+        });
+        return await fileToDataUrl(file);
+      }
+
+      // Generate a unique public ID
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8);
       let safeName = 'image';
       if (name) {
-        // Remove special characters and spaces, convert to lowercase
         safeName = name
           .toLowerCase()
           .replace(/[^a-z0-9]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_+|_+$/g, '')
-          .substring(0, 50); // Limit length
+          .substring(0, 50);
       }
       
-      // Create timestamp for uniqueness
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 8);
-      const fileName = `${safeName}_${timestamp}_${random}`;
-      
-      // Determine folder based on type - UPDATED TO MATCH YOUR STRUCTURE
-      let folderPath = '';
+      // Determine folder based on type
+      let folder = '';
       switch(type) {
         case 'team':
-          folderPath = '/assets/Team/';  // Your existing Team folder with capital T
+          folder = 'enkomokazini/team/';
           break;
         case 'sponsor':
-          folderPath = '/assets/';  // Store sponsor logos in root of assets
+          folder = 'enkomokazini/sponsors/';
           break;
         case 'hero':
-          folderPath = '/assets/';  // Store hero images in root of assets
+          folder = 'enkomokazini/hero/';
           break;
         case 'school':
-          folderPath = '/assets/';  // Where School Logo.jpeg already is
+          folder = 'enkomokazini/';
           break;
         default:
-          folderPath = '/assets/';
+          folder = 'enkomokazini/';
       }
-
-      // Convert file to base64 for the API
-      const base64Data = await fileToDataUrl(file);
       
-      // Try to upload to server API
-      try {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        
-        if (serverToken) {
-            headers["x-admin-token"] = serverToken;
-        }
-        
-        console.log('Uploading image to API...');
-        const res = await fetch("/api/upload", { 
-            method: "POST", 
-            headers,
-            body: JSON.stringify({
-              imageData: base64Data,
-              filename: fileName,
-              folder: folderPath,
-              type: type
-            })
+      const publicId = `${safeName}_${timestamp}_${random}`;
+      
+      // Create form data for Cloudinary unsigned upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'enkomokazini-admin-upload'); // Your unsigned preset
+      formData.append('public_id', publicId);
+      formData.append('folder', folder);
+      
+      // Upload to Cloudinary
+      const cloudName = 'dn2inh6kt';
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+      
+      console.log('Uploading to Cloudinary...', { publicId, folder });
+      
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.secure_url) {
+        console.log('Cloudinary upload successful:', result.secure_url);
+        toast({
+          title: "Upload successful!",
+          description: `Image uploaded to Cloudinary`,
         });
         
-        const responseText = await res.text();
-        console.log('API Response:', responseText);
-        
-        let json;
-        try {
-          json = JSON.parse(responseText);
-        } catch (e) {
-          console.error('Failed to parse JSON response:', responseText);
-          throw new Error('Invalid server response');
-        }
-        
-        if (res.ok) {
-            // Validate response has URL
-            if (json && json.url) {
-                console.log('Upload successful, URL:', json.url);
-                toast({
-                  title: "Upload successful!",
-                  description: `Image saved to ${folderPath}`,
-                });
-                return json.url as string;
-            } else if (json && json.filePath) {
-                // If server returns the file path, use it
-                console.log('Upload successful, filePath:', json.filePath);
-                toast({
-                  title: "Upload successful!",
-                  description: `Image saved to ${folderPath}`,
-                });
-                return json.filePath;
-            } else {
-                console.error('Server response missing URL/FilePath field:', json);
-                throw new Error('Invalid server response: No URL returned');
-            }
-        } else {
-            // Log server error details
-            console.error(`Upload failed with status ${res.status}:`, json);
-            
-            toast({
-              title: "Server upload failed",
-              description: json?.error || `Server error: ${res.status}`,
-              variant: "destructive"
-            });
-            
-            throw new Error(`Upload failed: ${res.status} ${json?.error || ''}`);
-        }
-      } catch (e) {
-          // fallback to data URL with timestamp to make it unique
-          console.log('Upload failed, falling back to data URL:', e);
-          const dataUrl = await fileToDataUrl(file);
-          toast({
-            title: "Using temporary storage",
-            description: "Image saved locally (will not persist after refresh)",
-          });
-          return dataUrl;
+        return result.secure_url;
+      } else {
+        console.error('Cloudinary upload failed:', result);
+        throw new Error(result.error?.message || 'Upload failed');
       }
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload image",
+        variant: "destructive"
+      });
+      
+      // Fallback to data URL
+      const dataUrl = await fileToDataUrl(file);
+      toast({
+        title: "Using temporary storage",
+        description: "Image saved locally (will not persist after refresh)",
+      });
+      return dataUrl;
     } finally {
       setIsUploading(false);
     }
@@ -283,7 +149,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setIsUploading(true);
     
     try {
-      // Merge editing with current data and ensure all arrays exist
       const currentData = loadSiteData();
       const payload = { 
         ...currentData, 
@@ -294,48 +159,17 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         services: editing.services || currentData.services || []
       } as SiteData;
       
-      // Save locally first for immediate feedback
       const nextLocal = saveSiteData(payload);
       if (nextLocal) {
         setData(nextLocal as SiteData);
         setEditing(nextLocal as SiteData);
         
-        // Trigger update event for preview components
         window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: nextLocal }));
         
         toast({
-          title: "Saved locally",
-          description: "Changes saved to browser storage",
+          title: "Saved successfully!",
+          description: "All changes saved to browser storage",
         });
-      }
-
-      // try to save to server
-      try {
-          const headers: any = { "Content-Type": "application/json" };
-          if (serverToken) headers["x-admin-token"] = serverToken;
-          const res = await fetch("/api/data", {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-          });
-          
-        if (res.ok) {
-          const next = await res.json();
-          // sync
-          saveSiteData(next);
-          window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: next }));
-          setData(next as SiteData);
-          setEditing(next as SiteData);
-          
-          toast({ 
-            title: "Saved to server", 
-            description: "Changes synced to server and local storage." 
-          });
-        } else {
-          console.log('Server save optional - using local only');
-        }
-      } catch (e) {
-        console.log('Server save optional - using local only');
       }
     } catch (error) {
       toast({
@@ -370,31 +204,26 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     
     toast({
       title: "Uploading hero images...",
-      description: `Uploading ${files.length} image(s) to /assets/ folder`,
+      description: `Uploading ${files.length} image(s) to Cloudinary`,
     });
     
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        // Use index as name for hero images
         const url = await uploadImage(f, 'hero', `hero_${urls.length + i + 1}`);
         urls.push(url);
       }
       
-      // Update editing state
       setEditing({ ...editing, heroImages: urls });
       
-      // Also immediately update the data state for preview
       const updatedData = { ...data, heroImages: urls };
       saveSiteData(updatedData);
       setData(updatedData);
-      
-      // Trigger update event for preview components
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
         title: "Hero images uploaded",
-        description: `Added ${files.length} image(s) to /assets/ folder`,
+        description: `Added ${files.length} image(s) to Cloudinary`,
       });
     } catch (error) {
       toast({
@@ -417,7 +246,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
     
-    // Also immediately update the data state for preview
     const updatedData = { ...data };
     if (!updatedData.team) updatedData.team = [];
     updatedData.team[index] = { ...updatedData.team[index], ...value };
@@ -458,7 +286,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
     
-    // Also immediately update the data state for preview
     const updatedData = { ...data };
     if (!updatedData.sponsors) updatedData.sponsors = [];
     updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
@@ -537,7 +364,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       const url = await uploadImage(file, 'school', 'school_image');
       setEditing({ ...editing, schoolImage: url });
       
-      // Also immediately update the data state for preview
       const updatedData = { ...data, schoolImage: url };
       saveSiteData(updatedData);
       setData(updatedData);
@@ -547,21 +373,20 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // Helper function to get image source with fallback
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    // If it's already a proper path (starts with /) or data URL, return as is
-    if (url.startsWith('/') || url.startsWith('data:image') || url.startsWith('http')) {
+    if (url.startsWith('data:image') || 
+        url.startsWith('http') || 
+        url.includes('cloudinary.com') ||
+        url.includes('res.cloudinary.com')) {
       return url;
     }
     
-    // If it's a relative path without leading slash, add it
     if (url.startsWith('assets/') || url.startsWith('public/')) {
       return `/${url}`;
     }
     
-    // If it's just a filename, assume it's in assets
     if (url && !url.includes('/') && url.includes('.')) {
       return `/assets/${url}`;
     }
@@ -569,14 +394,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return url;
   };
 
-  // Helper to remove hero image
   const removeHeroImage = (index: number) => {
     const currentImages = editing.heroImages || data.heroImages || [];
     const newImages = [...currentImages];
     newImages.splice(index, 1);
     setEditing({ ...editing, heroImages: newImages });
     
-    // Also update data state
     const updatedData = { ...data, heroImages: newImages };
     saveSiteData(updatedData);
     setData(updatedData);
@@ -622,18 +445,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             <h2 className="font-serif text-xl font-semibold text-foreground mb-4">Site Editor</h2>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Server Token (required for permanent uploads)</label>
-                <input 
-                  value={serverToken} 
-                  onChange={(e)=>setServerToken(e.target.value)} 
-                  placeholder="tech2026SINGAWE" 
-                  className="w-full px-3 py-2 rounded border border-border bg-background" 
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Token: <code className="bg-gray-100 px-1">tech2026SINGAWE</code> — Images save to server folders
-                </p>
-              </div>
+              {/* REMOVED: Server token section - not needed */}
               
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Name</label>
@@ -678,7 +490,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
-                <p className="text-xs text-muted-foreground mb-2">Images saved to: <code>/assets/Team/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">Images saved to Cloudinary: <code>enkomokazini/team/</code></p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
@@ -690,7 +502,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                               alt={m.name} 
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                // If image fails to load, show initials
                                 const img = e.target as HTMLImageElement;
                                 img.style.display = 'none';
                                 const parent = img.parentElement;
@@ -752,7 +563,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
-                <p className="text-xs text-muted-foreground mb-2">Logos saved to: <code>/assets/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">Logos saved to Cloudinary: <code>enkomokazini/sponsors/</code></p>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
                     <div key={idx} className="flex gap-2 items-center p-2 border border-border rounded">
@@ -822,7 +633,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
-                <p className="text-xs text-muted-foreground mb-2">Images saved to: <code>/assets/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">Images saved to Cloudinary: <code>enkomokazini/hero/</code></p>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -839,7 +650,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                         alt={`hero-${i}`} 
                         className="h-20 w-32 object-cover rounded border border-border"
                         onError={(e) => {
-                          // If image fails to load, show a placeholder
                           const img = e.target as HTMLImageElement;
                           img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2Uge2krMX08L3RleHQ+PC9zdmc+';
                         }}
@@ -861,7 +671,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
-                <p className="text-xs text-muted-foreground mb-2">Image saved to: <code>/assets/</code></p>
+                <p className="text-xs text-muted-foreground mb-2">Image saved to Cloudinary: <code>enkomokazini/</code></p>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -881,7 +691,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                     alt="school" 
                     className="h-28 w-full object-cover rounded border border-border"
                     onError={(e) => {
-                      // If image fails to load, show a placeholder
                       const img = e.target as HTMLImageElement;
                       img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2Nob29sPC90ZXh0Pjwvc3ZnPg==';
                     }}
@@ -1002,15 +811,15 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               </div>
               
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <h3 className="text-sm font-medium text-blue-800 mb-1">Debug Info:</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-1">Cloudinary Info:</h3>
                 <p className="text-xs text-blue-700">
-                  Check browser console (F12) for upload logs. Images should appear immediately in preview.
+                  Images upload directly to Cloudinary. Check browser console (F12) for upload logs.
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  API endpoint: <code className="bg-blue-100 px-1">/api/upload</code>
+                  Cloud Name: <code className="bg-blue-100 px-1">dn2inh6kt</code>
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  Token: <code className="bg-blue-100 px-1">tech2026SINGAWE</code>
+                  Upload Preset: <code className="bg-blue-100 px-1">enkomokazini-admin-upload</code>
                 </p>
               </div>
             </div>
