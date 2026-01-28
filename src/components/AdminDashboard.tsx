@@ -24,12 +24,17 @@ interface CloudinaryUploadResponse {
   };
 }
 
-// ✅ FIXED: Define proper TeamMember interface
 interface TeamMember {
   name: string;
   role: string;
-  image: string; // ✅ Changed from string | undefined to string
+  image: string;
   initials?: string;
+}
+
+interface Sponsor {
+  name: string;
+  url: string;
+  image: string;
 }
 
 export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
@@ -39,12 +44,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
 
-  // ✅ FIXED: Use ACTUAL Cloudinary values - remove hardcoded defaults
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  // ✅ FIXED: Use proper fallback values if env vars aren't loaded
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inh6kt';
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'enkomokazini-test';
 
   useEffect(() => {
-    // Log environment variables for debugging
     console.log('🔧 Cloudinary Config:', {
       cloudName,
       uploadPreset,
@@ -53,7 +57,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       mode: import.meta.env.MODE
     });
     
-    // Check Cloudinary connection on mount
     checkCloudinaryConnection();
     
     const onUpdate = (e: CustomEvent) => {
@@ -66,35 +69,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  // ✅ FIXED: Better Cloudinary connection check
-  const checkCloudinaryConnection = async () => {
-    try {
-      if (!cloudName || !uploadPreset) {
-        console.warn('⚠️ Cloudinary environment variables not set');
-        setCloudinaryStatus('unavailable');
-        return;
-      }
-      
-      // Test with a simple HEAD request
-      const response = await fetch(`https://res.cloudinary.com/${cloudName}/image/upload/v1700000000/sample.jpg`, {
-        method: 'HEAD'
-      });
-      
-      if (response.ok) {
-        setCloudinaryStatus('available');
-      } else {
-        setCloudinaryStatus('unavailable');
-      }
-    } catch (error) {
-      console.error('❌ Cloudinary connection check failed:', error);
-      setCloudinaryStatus('unavailable');
-    }
-  };
-
-  // ✅ FIXED: SIMPLIFIED uploadImage function
-  const uploadImage = async (
-    file: File, 
-    type: 'team' | 'sponsor' | 'hero' | 'school'
+  // ✅ CONSISTENT: Unified file upload handler
+  const uploadFile = async (
+    file: File,
+    category: 'team' | 'sponsor' | 'hero' | 'school',
+    fileName?: string
   ): Promise<string> => {
     setIsUploading(true);
     
@@ -119,13 +98,13 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       return await fileToDataUrl(file);
     }
 
-    // ✅ FIXED: Check if Cloudinary is properly configured
-    if (!cloudName || !uploadPreset) {
-      console.warn('⚠️ Cloudinary not configured, using local storage');
+    // Use fallback if Cloudinary is unavailable
+    if (cloudinaryStatus === 'unavailable' || !cloudName || !uploadPreset) {
+      console.warn('⚠️ Cloudinary not configured, using browser storage');
       const dataUrl = await fileToDataUrl(file);
       toast({
         title: "Saved locally",
-        description: "Image saved to browser storage (Cloudinary not configured)",
+        description: "Image saved to browser storage",
       });
       setIsUploading(false);
       return dataUrl;
@@ -136,17 +115,17 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       formData.append('file', file);
       formData.append('upload_preset', uploadPreset);
       
-      // ✅ REMOVED: folder parameter for unsigned uploads
-      // ✅ REMOVED: transformation parameter
-
+      // Optional: Add categorization tag
+      formData.append('tags', `enkomokazini_${category}`);
+      
       const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
       
       console.log('📤 Uploading to Cloudinary:', {
         cloudName,
         uploadPreset,
         file: file.name,
-        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-        type
+        category,
+        fileName
       });
       
       const response = await fetch(uploadUrl, {
@@ -158,7 +137,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         const errorText = await response.text();
         console.error('❌ HTTP Error:', response.status, errorText);
         
-        // Parse the error for better messaging
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
           const errorJson = JSON.parse(errorText);
@@ -169,8 +147,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       }
       
       const result: CloudinaryUploadResponse = await response.json();
-      
-      console.log('📥 Cloudinary Response:', result);
       
       if (result.error) {
         console.error('❌ Cloudinary error:', result.error.message);
@@ -208,7 +184,84 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ FIXED: Quick test function
+  // ✅ CONSISTENT: File upload handler for all components
+  const handleImageUpload = async (
+    type: 'team' | 'sponsor' | 'hero' | 'school',
+    file: File,
+    index?: number,
+    name?: string
+  ) => {
+    try {
+      const imageUrl = await uploadFile(file, type, name);
+      
+      switch (type) {
+        case 'team':
+          if (index !== undefined) {
+            updateTeamMember(index, { image: imageUrl });
+          }
+          break;
+          
+        case 'sponsor':
+          if (index !== undefined) {
+            updateSponsor(index, { image: imageUrl });
+          }
+          break;
+          
+        case 'hero':
+          // Handle hero images (multiple)
+          const currentImages = editing.heroImages || data.heroImages || [];
+          const updatedImages = [...currentImages, imageUrl];
+          setEditing({ ...editing, heroImages: updatedImages });
+          
+          const updatedData = { ...data, heroImages: updatedImages };
+          saveSiteData(updatedData);
+          window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+          break;
+          
+        case 'school':
+          setEditing({ ...editing, schoolImage: imageUrl });
+          const updatedSchoolData = { ...data, schoolImage: imageUrl };
+          saveSiteData(updatedSchoolData);
+          window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedSchoolData }));
+          break;
+      }
+      
+      toast({
+        title: "Image uploaded",
+        description: "Image has been successfully saved",
+      });
+      
+    } catch (error) {
+      // Error already handled in uploadFile
+    }
+  };
+
+  // ✅ FIXED: Cloudinary connection check
+  const checkCloudinaryConnection = async () => {
+    try {
+      if (!cloudName || !uploadPreset) {
+        console.warn('⚠️ Cloudinary environment variables not set');
+        setCloudinaryStatus('unavailable');
+        return;
+      }
+      
+      // Test with a simple HEAD request
+      const response = await fetch(`https://res.cloudinary.com/${cloudName}/image/upload/v1700000000/sample.jpg`, {
+        method: 'HEAD'
+      });
+      
+      if (response.ok) {
+        setCloudinaryStatus('available');
+      } else {
+        setCloudinaryStatus('unavailable');
+      }
+    } catch (error) {
+      console.error('❌ Cloudinary connection check failed:', error);
+      setCloudinaryStatus('unavailable');
+    }
+  };
+
+  // ✅ FIXED: Test function
   const quickTest = async () => {
     console.log('Testing Cloudinary config:', { cloudName, uploadPreset });
     
@@ -222,7 +275,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
     
     try {
-      // Create a simple test image
       const canvas = document.createElement('canvas');
       canvas.width = 10;
       canvas.height = 10;
@@ -239,31 +291,14 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       if (!blob) throw new Error('Could not create test image');
       
       const file = new File([blob], 'test.png', { type: 'image/png' });
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', uploadPreset);
+      const imageUrl = await uploadFile(file, 'school', 'test_image');
       
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
-        { method: 'POST', body: formData }
-      );
+      toast({
+        title: "✅ Cloudinary Test Successful",
+        description: "Upload preset is working correctly!",
+      });
+      console.log('Test image URL:', imageUrl);
       
-      const result = await response.json();
-      console.log('Direct test result:', result);
-      
-      if (result.secure_url) {
-        toast({
-          title: "✅ Cloudinary Test Successful",
-          description: "Upload preset is working correctly!",
-        });
-        console.log('Test image URL:', result.secure_url);
-      } else {
-        toast({
-          title: "❌ Upload failed",
-          description: result.error?.message || "Unknown error",
-          variant: "destructive"
-        });
-      }
     } catch (error: any) {
       console.error('Direct test failed:', error);
       toast({
@@ -283,12 +318,14 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         ...currentData, 
         ...editing,
         heroImages: editing.heroImages || currentData.heroImages || [],
-        // ✅ FIXED: Ensure team members have proper image strings
         team: (editing.team || currentData.team || []).map(member => ({
           ...member,
-          image: member.image || '' // Ensure image is always a string
+          image: member.image || ''
         })),
-        sponsors: editing.sponsors || currentData.sponsors || [],
+        sponsors: (editing.sponsors || currentData.sponsors || []).map(sponsor => ({
+          ...sponsor,
+          image: sponsor.image || ''
+        })),
         services: editing.services || currentData.services || [],
         ui: editing.ui || currentData.ui || {}
       };
@@ -331,12 +368,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ CONSISTENT: Hero images upload (multiple)
+  const handleHeroImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
-    const currentImages = editing.heroImages || data.heroImages || [];
-    const urls: string[] = [...currentImages];
     
     toast({
       title: "Uploading hero images...",
@@ -345,17 +380,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     
     try {
       for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const url = await uploadImage(f, 'hero');
-        urls.push(url);
+        await handleImageUpload('hero', files[i]);
       }
-      
-      setEditing({ ...editing, heroImages: urls });
-      
-      const updatedData = { ...data, heroImages: urls };
-      saveSiteData(updatedData);
-      setData(updatedData);
-      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
         title: "Hero images uploaded",
@@ -369,27 +395,26 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       });
     }
     
-    // Clear the file input
     e.target.value = '';
   };
 
-  // ✅ FIXED: Team editors with proper image handling
+  // ✅ CONSISTENT: Team member handlers
   const addTeamMember = () => {
     const t = editing.team ? [...editing.team] : [];
     t.push({ 
       name: "New Member", 
       role: "Team Role", 
-      image: "" // ✅ Always a string
+      image: ""
     });
     setEditing({ ...editing, team: t });
   };
   
-  const updateTeamMember = (index: number, value: any) => {
+  const updateTeamMember = (index: number, value: Partial<TeamMember>) => {
     const t = editing.team ? [...editing.team] : [];
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
     
-    // ✅ Immediately save to ensure preview updates
+    // Save immediately for preview
     const updatedData = { ...data };
     if (!updatedData.team) updatedData.team = [];
     updatedData.team[index] = { ...updatedData.team[index], ...value };
@@ -403,25 +428,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setEditing({ ...editing, team: t });
   };
 
-  // ✅ FIXED: Team image upload with immediate update
-  const handleTeamImageUpload = async (index: number, file?: File) => {
-    if (!file) return;
-    
-    try {
-      const url = await uploadImage(file, 'team');
-      // ✅ Update both editing state AND save immediately
-      updateTeamMember(index, { image: url });
-      
-      toast({
-        title: "Team image updated",
-        description: "Team member image saved successfully",
-      });
-    } catch (error) {
-      // Error handled in uploadImage function
-    }
-  };
-
-  // Sponsors editors
+  // ✅ CONSISTENT: Sponsor handlers
   const addSponsor = () => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
     s.push({ 
@@ -432,12 +439,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setEditing({ ...editing, sponsors: s });
   };
   
-  const updateSponsor = (index: number, value: any) => {
+  const updateSponsor = (index: number, value: Partial<Sponsor>) => {
     const s = editing.sponsors ? [...editing.sponsors] : [];
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
     
-    // Immediately save for preview
+    // Save immediately for preview
     const updatedData = { ...data };
     if (!updatedData.sponsors) updatedData.sponsors = [];
     updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
@@ -451,18 +458,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setEditing({ ...editing, sponsors: s });
   };
 
-  const handleSponsorImage = async (index: number, file?: File) => {
-    if (!file) return;
-    
-    try {
-      const url = await uploadImage(file, 'sponsor');
-      updateSponsor(index, { image: url });
-    } catch (error) {
-      // Error handled in uploadImage function
-    }
-  };
-
-  // Services editors
+  // Services handlers (unchanged)
   const addService = () => {
     const s = editing.services ? [...editing.services] : [];
     s.push({ 
@@ -508,47 +504,23 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setEditing({ ...editing, services: s });
   };
 
-  const handleSchoolImage = async (file?: File) => {
-    if (!file) return;
-    
-    try {
-      const url = await uploadImage(file, 'school');
-      setEditing({ ...editing, schoolImage: url });
-      
-      // Immediately save for preview
-      const updatedData = { ...data, schoolImage: url };
-      saveSiteData(updatedData);
-      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
-    } catch (error) {
-      // Error handled in uploadImage function
-    }
-  };
-
-  // ✅ FIXED: getImageSrc function
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    // Handle data URLs
-    if (url.startsWith('data:image')) {
+    if (url.startsWith('data:image') || 
+        url.startsWith('http') || 
+        url.includes('cloudinary.com')) {
       return url;
     }
     
-    // Handle Cloudinary URLs
-    if (url.startsWith('http') && url.includes('cloudinary.com')) {
-      return url;
-    }
-    
-    // Handle relative URLs
     if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
       return url;
     }
     
-    // Handle simple filenames
     if (url && !url.includes('/') && url.includes('.')) {
       return `/assets/${url}`;
     }
     
-    // Return empty string for empty/null
     return url || '';
   };
 
@@ -718,7 +690,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 />
               </div>
 
-              {/* ✅ FIXED: Team Members Section */}
+              {/* ✅ CONSISTENT: Team Members Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Team Members</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -779,7 +751,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                             accept="image/*" 
                             onChange={async (e)=>{ 
                               if(e.target.files && e.target.files[0]){ 
-                                await handleTeamImageUpload(idx, e.target.files[0]); 
+                                await handleImageUpload('team', e.target.files[0], idx, m.name); 
                               } 
                             }} 
                             className="text-xs w-32"
@@ -806,7 +778,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </div>
               </div>
 
-              {/* ✅ FIXED: Sponsors Section */}
+              {/* ✅ CONSISTENT: Sponsors Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Sponsors</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -864,7 +836,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                           accept="image/*" 
                           onChange={async (e)=>{ 
                             if(e.target.files && e.target.files[0]) {
-                              await handleSponsorImage(idx, e.target.files[0]); 
+                              await handleImageUpload('sponsor', e.target.files[0], idx, s.name); 
                             } 
                           }} 
                           className="text-xs w-32"
@@ -890,7 +862,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </div>
               </div>
 
-              {/* ✅ FIXED: Hero Images Section */}
+              {/* ✅ CONSISTENT: Hero Images Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Hero Images (upload multiple)</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -900,7 +872,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   type="file" 
                   accept="image/*" 
                   multiple 
-                  onChange={handleFileUpload} 
+                  onChange={handleHeroImagesUpload} 
                   className="w-full"
                   disabled={isUploading}
                 />
@@ -931,7 +903,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </p>
               </div>
 
-              {/* ✅ FIXED: School Image Section */}
+              {/* ✅ CONSISTENT: School Image Section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">School Image (used in About)</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -942,7 +914,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   accept="image/*" 
                   onChange={async (e)=>{ 
                     if(e.target.files && e.target.files[0]) {
-                      await handleSchoolImage(e.target.files[0]); 
+                      await handleImageUpload('school', e.target.files[0]); 
                     } 
                   }} 
                   className="w-full"
@@ -1105,7 +1077,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </button>
               </div>
               
-              {/* ✅ FIXED: Cloudinary Info */}
+              {/* Cloudinary Info */}
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                 <h3 className="text-sm font-medium text-blue-800 mb-1">Cloudinary Status:</h3>
                 <p className="text-xs text-blue-700">
@@ -1154,7 +1126,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                       <ol className="text-xs text-amber-700 ml-4 list-decimal mt-1">
                         <li>Create a <code>.env</code> file in your <code>ui/</code> folder</li>
                         <li>Add: <code>VITE_CLOUDINARY_CLOUD_NAME=dn2inh6kt</code></li>
-                        <li>Add: <code>VITE_CLOUDINARY_UPLOAD_PRESET=your-preset-name</code></li>
+                        <li>Add: <code>VITE_CLOUDINARY_UPLOAD_PRESET=enkomokazini-test</code></li>
                         <li>Restart your development server</li>
                       </ol>
                     </div>
