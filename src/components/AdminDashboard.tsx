@@ -49,44 +49,116 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return () => window.removeEventListener("siteDataUpdated", onUpdate as EventListener);
   }, []);
 
-  const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
-    setIsUploading(true);
+ const uploadImage = async (file: File, type: 'team' | 'sponsor' | 'hero' | 'school', name?: string): Promise<string> => {
+  setIsUploading(true);
+  
+  try {
+    // Validate file
+    if (!file || !file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file (JPG, PNG, GIF, etc.)",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
     
-    try {
-      // Validate file exists and is an image
-      if (!file || !file.type.startsWith('image/')) {
-          console.error('Invalid file type. Please upload an image.');
-          toast({
-            title: "Invalid file",
-            description: "Please upload an image file (JPG, PNG, GIF, etc.)",
-            variant: "destructive"
-          });
-          return await fileToDataUrl(file);
-      }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 5MB",
+        variant: "destructive"
+      });
+      return await fileToDataUrl(file);
+    }
+
+    // Generate a unique public ID
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    let safeName = 'image';
+    if (name) {
+      safeName = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 50);
+    }
+    
+    // Determine folder based on type
+    let folder = '';
+    switch(type) {
+      case 'team':
+        folder = 'enkomokazini/team/';
+        break;
+      case 'sponsor':
+        folder = 'enkomokazini/sponsors/';
+        break;
+      case 'hero':
+        folder = 'enkomokazini/hero/';
+        break;
+      case 'school':
+        folder = 'enkomokazini/';
+        break;
+      default:
+        folder = 'enkomokazini/';
+    }
+    
+    const publicId = `${folder}${safeName}_${timestamp}_${random}`;
+    
+    // Create form data for Cloudinary unsigned upload
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'enkomokazini_admin_upload'); // Your unsigned preset
+    formData.append('public_id', publicId);
+    formData.append('folder', folder);
+    
+    // Upload to Cloudinary
+    const cloudName = 'dn2inh6kt';
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+    
+    console.log('Uploading to Cloudinary...', { publicId, folder });
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.secure_url) {
+      console.log('Cloudinary upload successful:', result.secure_url);
+      toast({
+        title: "Upload successful!",
+        description: `Image uploaded to Cloudinary`,
+      });
       
-      // Check file size if needed (e.g., limit to 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-          console.error('File too large. Maximum size is 5MB.');
-          toast({
-            title: "File too large",
-            description: "Maximum file size is 5MB",
-            variant: "destructive"
-          });
-          return await fileToDataUrl(file);
-      }
-
-      // Get file extension
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-      if (!validExtensions.includes(fileExt)) {
-        toast({
-          title: "Invalid file format",
-          description: "Please upload JPG, PNG, GIF, WebP, or SVG files",
-          variant: "destructive"
-        });
-        return await fileToDataUrl(file);
-      }
-
+      // Return the optimized URL
+      return result.secure_url;
+    } else {
+      console.error('Cloudinary upload failed:', result);
+      throw new Error(result.error?.message || 'Upload failed');
+    }
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    toast({
+      title: "Upload failed",
+      description: error instanceof Error ? error.message : "Failed to upload image",
+      variant: "destructive"
+    });
+    
+    // Fallback to data URL
+    const dataUrl = await fileToDataUrl(file);
+    toast({
+      title: "Using temporary storage",
+      description: "Image saved locally (will not persist after refresh)",
+    });
+    return dataUrl;
+  } finally {
+    setIsUploading(false);
+  }
+};
       // Generate a safe filename
       let safeName = 'image';
       if (name) {
