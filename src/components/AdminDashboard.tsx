@@ -7,6 +7,7 @@ import { AboutSection } from "@/components/AboutSection";
 import { TeamSection } from "@/components/TeamSection";
 import { ContactSection } from "@/components/ContactSection";
 import { Footer } from "@/components/Footer";
+import { GallerySection } from "@/components/GallerySection";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -29,12 +30,28 @@ interface TeamMember {
   role: string;
   image: string;
   initials?: string;
+  secondaryImage?: string;
 }
 
 interface Sponsor {
   name: string;
   url: string;
   image: string;
+}
+
+interface GalleryImage {
+  src: string;
+  title: string;
+}
+
+interface GradeGallery {
+  grade: string;
+  images: GalleryImage[];
+}
+
+interface YearGallery {
+  year: string;
+  grades: GradeGallery[];
 }
 
 export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
@@ -145,7 +162,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   // ✅ UNIFIED UPLOAD FUNCTION USING YOUR PRESET
   const uploadImage = async (
     file: File, 
-    category: 'team' | 'sponsor' | 'hero' | 'school', 
+    category: 'team' | 'sponsor' | 'hero' | 'school' | 'gallery', 
     name?: string
   ): Promise<string> => {
     setIsUploading(true);
@@ -428,7 +445,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     t.push({ 
       name: "New Member", 
       role: "Team Role", 
-      image: ""
+      image: "",
+      secondaryImage: ""
     });
     setEditing({ ...editing, team: t });
   };
@@ -569,24 +587,61 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
+  // ✅ GALLERY IMAGES UPLOAD
+  const handleGalleryImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    toast({
+      title: "Uploading gallery images...",
+      description: `Uploading ${files.length} image(s) using ${uploadPreset}`,
+    });
+    
+    try {
+      const currentGallery = editing.galleryImages || data.galleryImages || [];
+      const updatedGallery = [...currentGallery];
+      
+      for (let i = 0; i < files.length; i++) {
+        const url = await uploadImage(files[i], 'gallery', `gallery_${updatedGallery.length + i + 1}`);
+        updatedGallery.push({ src: url, title: `Gallery Image ${updatedGallery.length + i + 1}` });
+      }
+      
+      setEditing({ ...editing, galleryImages: updatedGallery });
+      
+      const updatedData = { ...data, galleryImages: updatedGallery };
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+      
+      toast({
+        title: "Gallery images uploaded",
+        description: `Added ${files.length} image(s) successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload some gallery images",
+        variant: "destructive"
+      });
+    }
+    
+    e.target.value = '';
+  };
+
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    if (url.startsWith('data:image') || 
-        url.startsWith('http') || 
-        url.includes('cloudinary.com')) {
-      return url;
-    }
-    
-    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
-      return url;
-    }
-    
-    if (url && !url.includes('/') && url.includes('.')) {
-      return `/assets/${url}`;
-    }
-    
-    return url || '';
+    // already a data URL (base64), return as-is
+    if (url.startsWith("data:")) return url;
+    // absolute URLs
+    if (/^https?:\/\//i.test(url)) return url;
+    // already an absolute path on site
+    if (url.startsWith('/')) return url;
+    // relative paths that explicitly point to assets
+    if (url.startsWith('./') || url.startsWith('../')) return url;
+    // if it already begins with 'assets/', prefix a leading slash
+    if (url.startsWith('assets/')) return `/${url}`;
+    // otherwise assume it's a filename inside /assets/
+    return `/assets/${url}`;
   };
 
   const removeHeroImage = (index: number) => {
@@ -596,6 +651,17 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setEditing({ ...editing, heroImages: newImages });
     
     const updatedData = { ...data, heroImages: newImages };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+  };
+
+  const removeGalleryImage = (index: number) => {
+    const currentImages = editing.galleryImages || data.galleryImages || [];
+    const newImages = [...currentImages];
+    newImages.splice(index, 1);
+    setEditing({ ...editing, galleryImages: newImages });
+    
+    const updatedData = { ...data, galleryImages: newImages };
     saveSiteData(updatedData);
     window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
@@ -824,30 +890,61 @@ Upload Preset: ${uploadPreset}`}
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
                       <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
-                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0">
-                          {m.image ? (
-                            <img 
-                              src={getImageSrc(m.image)} 
-                              alt={m.name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                img.style.display = 'none';
-                                const parent = img.parentElement;
-                                if (parent) {
-                                  const initials = m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
-                                  const span = document.createElement('span');
-                                  span.className = 'text-accent-foreground font-bold';
-                                  span.textContent = initials;
-                                  parent.appendChild(span);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span className="text-accent-foreground font-bold">
-                              {m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                            </span>
-                          )}
+                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+                          {((): React.ReactNode => {
+                            const resolveImageUrl = (val?: string) => {
+                              if (!val) return undefined;
+                              // already a data URL (base64), return as-is
+                              if (val.startsWith("data:")) return val;
+                              // absolute URLs
+                              if (/^https?:\/\//i.test(val)) return val;
+                              // already an absolute path on site
+                              if (val.startsWith('/')) return val;
+                              // relative paths that explicitly point to assets
+                              if (val.startsWith('./') || val.startsWith('../')) return val;
+                              // if it already begins with 'assets/', prefix a leading slash
+                              if (val.startsWith('assets/')) return `/${val}`;
+                              // otherwise assume it's a filename inside /assets/
+                              return `/assets/${val}`;
+                            };
+
+                            const primary = resolveImageUrl(m.image) || m.image;
+                            const secondary = resolveImageUrl(m.secondaryImage) || m.secondaryImage;
+
+                            if (primary) {
+                              return (
+                                <>
+                                  <img 
+                                    src={primary} 
+                                    alt={m.name} 
+                                    className="w-full h-full object-cover"
+                                    style={{
+                                      objectFit: (m as any).imageFit || 'cover',
+                                      objectPosition: (m as any).imagePosition || 'center',
+                                    }}
+                                  />
+                                  {secondary ? (
+                                    <img
+                                      src={secondary}
+                                      alt={`${m.name} secondary`}
+                                      className="w-4 h-4 rounded-full object-cover shadow-sm absolute -right-0 -bottom-0 border border-background"
+                                      style={{
+                                        position: 'absolute',
+                                        right: '0',
+                                        bottom: '0',
+                                      }}
+                                    />
+                                  ) : null}
+                                </>
+                              );
+                            }
+
+                            return (
+                              <span className="text-accent-foreground font-bold">
+                                {m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="flex-1 grid grid-cols-2 gap-2">
                           <div>
@@ -920,7 +1017,7 @@ Upload Preset: ${uploadPreset}`}
                       <div className="w-16 h-16 rounded border border-border overflow-hidden bg-gray-50 flex items-center justify-center flex-shrink-0">
                         {s.image ? (
                           <img 
-                            src={getImageSrc(s.image)} 
+                            src={s.image}
                             alt={s.name} 
                             className="w-full h-full object-contain p-1"
                             onError={(e) => {
@@ -1036,6 +1133,53 @@ Upload Preset: ${uploadPreset}`}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {(editing.heroImages || data.heroImages || []).length} images
+                </p>
+              </div>
+
+              {/* Gallery Images Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Gallery Images (upload multiple)</label>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    cloudinaryStatus === 'connected' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
+                  </span>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  multiple 
+                  onChange={handleGalleryImagesUpload} 
+                  className="w-full"
+                  disabled={isUploading}
+                />
+                <div className="mt-2 flex gap-2 flex-wrap">
+                  {(editing.galleryImages || data.galleryImages || []).map((image, i)=> (
+                    <div key={i} className="relative">
+                      <img 
+                        src={getImageSrc(image.src)} 
+                        alt={`gallery-${i}`} 
+                        className="h-20 w-32 object-cover rounded border border-border"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+R2FsbGVyeSB7aSsxfTwvdGV4dD48L3N2Zz4=';
+                        }}
+                      />
+                      <button
+                        onClick={() => removeGalleryImage(i)}
+                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-destructive/90"
+                        disabled={isUploading}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(editing.galleryImages || data.galleryImages || []).length} gallery images
                 </p>
               </div>
 
@@ -1254,6 +1398,9 @@ Upload Preset: ${uploadPreset}`}
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <TeamSection />
+            </div>
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
+              <GallerySection />
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <ContactSection />
