@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw, FolderPlus, FolderMinus, ImagePlus, Calendar, MapPin, Clock, GraduationCap, ExternalLink, Plus, Trash2, Edit, X, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { 
+  LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw, 
+  FolderPlus, FolderMinus, ImagePlus, Calendar, MapPin, Clock, 
+  GraduationCap, ExternalLink, Plus, Trash2, Edit, X, FolderOpen, 
+  ChevronLeft, ChevronRight 
+} from "lucide-react";
 import { loadSiteData, saveSiteData, resetSiteData, SiteData } from "@/lib/siteData";
 import { useToast } from "@/hooks/use-toast";
 import { HeroCarousel } from "@/components/HeroCarousel";
@@ -1032,18 +1037,21 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    // already a data URL (base64), return as-is
-    if (url.startsWith("data:")) return url;
-    // absolute URLs
-    if (/^https?:\/\//i.test(url)) return url;
-    // already an absolute path on site
-    if (url.startsWith('/')) return url;
-    // relative paths that explicitly point to assets
-    if (url.startsWith('./') || url.startsWith('../')) return url;
-    // if it already begins with 'assets/', prefix a leading slash
-    if (url.startsWith('assets/')) return `/${url}`;
-    // otherwise assume it's a filename inside /assets/
-    return `/assets/${url}`;
+    if (url.startsWith('data:image') || 
+        url.startsWith('http') || 
+        url.includes('cloudinary.com')) {
+      return url;
+    }
+    
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return url;
+    }
+    
+    if (url && !url.includes('/') && url.includes('.')) {
+      return `/assets/${url}`;
+    }
+    
+    return url || '';
   };
 
   const removeHeroImage = (index: number) => {
