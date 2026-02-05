@@ -24,11 +24,12 @@ interface CloudinaryUploadResponse {
   };
 }
 
-interface TeamMember {
+ interface TeamMember {
   name: string;
   role: string;
   image: string;
   initials?: string;
+  secondaryImage?: string; // Added this line
 }
 
 interface Sponsor {
@@ -570,24 +571,21 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   const getImageSrc = (url: string | undefined): string => {
-    if (!url) return '';
-    
-    if (url.startsWith('data:image') || 
-        url.startsWith('http') || 
-        url.includes('cloudinary.com')) {
-      return url;
-    }
-    
-    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
-      return url;
-    }
-    
-    if (url && !url.includes('/') && url.includes('.')) {
-      return `/assets/${url}`;
-    }
-    
-    return url || '';
-  };
+  if (!url) return '';
+  
+  // already a data URL (base64), return as-is
+  if (url.startsWith("data:")) return url;
+  // absolute URLs (Cloudinary, http, https)
+  if (/^https?:\/\//i.test(url)) return url;
+  // already an absolute path on site
+  if (url.startsWith('/')) return url;
+  // relative paths that explicitly point to assets
+  if (url.startsWith('./') || url.startsWith('../')) return url;
+  // if it already begins with 'assets/', prefix a leading slash
+  if (url.startsWith('assets/')) return `/${url}`;
+  // otherwise assume it's a filename inside /assets/
+  return `/assets/${url}`;
+};
 
   const removeHeroImage = (index: number) => {
     const currentImages = editing.heroImages || data.heroImages || [];
@@ -809,99 +807,125 @@ Upload Preset: ${uploadPreset}`}
               </div>
 
               {/* Team Members Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-foreground">Team Members</label>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    cloudinaryStatus === 'connected' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 gap-2">
-                    {(editing.team || data.team || []).map((m, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
-                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0">
-                          {m.image ? (
-                            <img 
-                              src={getImageSrc(m.image)} 
-                              alt={m.name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                img.style.display = 'none';
-                                const parent = img.parentElement;
-                                if (parent) {
-                                  const initials = m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
-                                  const span = document.createElement('span');
-                                  span.className = 'text-accent-foreground font-bold';
-                                  span.textContent = initials;
-                                  parent.appendChild(span);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span className="text-accent-foreground font-bold">
-                              {m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-1 grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-muted-foreground">Name</label>
-                            <input 
-                              value={m.name} 
-                              onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
-                              className="w-full px-2 py-1 rounded border border-border bg-background" 
-                              disabled={isUploading}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-muted-foreground">Role</label>
-                            <input 
-                              value={m.role} 
-                              onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
-                              className="w-full px-2 py-1 rounded border border-border bg-background" 
-                              disabled={isUploading}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={async (e)=>{ 
-                              if(e.target.files && e.target.files[0]){ 
-                                await handleTeamImageUpload(idx, e.target.files[0]); 
-                              } 
-                            }} 
-                            className="text-xs w-32"
-                            disabled={isUploading}
-                          />
-                          <button 
-                            onClick={()=>removeTeamMember(idx)} 
-                            className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs"
-                            disabled={isUploading}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button 
-                    onClick={addTeamMember} 
-                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
-                    disabled={isUploading}
-                  >
-                    Add Member
-                  </button>
-                </div>
-              </div>
+<div>
+  <div className="flex items-center justify-between mb-2">
+    <label className="block text-sm font-medium text-foreground">Team Members</label>
+    <span className={`text-xs px-2 py-1 rounded ${
+      cloudinaryStatus === 'connected' 
+        ? 'bg-green-100 text-green-800' 
+        : 'bg-amber-100 text-amber-800'
+    }`}>
+      {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
+    </span>
+  </div>
+  <div className="space-y-2">
+    <div className="grid grid-cols-1 gap-2">
+      {(editing.team || data.team || []).map((m, idx) => (
+        <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
+          <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0">
+            {(() => {
+              const resolveImageUrl = (val?: string) => {
+                if (!val) return undefined;
+                // already a data URL (base64), return as-is
+                if (val.startsWith("data:")) return val;
+                // absolute URLs (Cloudinary, http, https)
+                if (/^https?:\/\//i.test(val)) return val;
+                // already an absolute path on site
+                if (val.startsWith('/')) return val;
+                // relative paths that explicitly point to assets
+                if (val.startsWith('./') || val.startsWith('../')) return val;
+                // if it already begins with 'assets/', prefix a leading slash
+                if (val.startsWith('assets/')) return `/${val}`;
+                // otherwise assume it's a filename inside /assets/
+                return `/assets/${val}`;
+              };
 
+              const primary = resolveImageUrl(m.image);
+              const secondary = resolveImageUrl((m as any).secondaryImage);
+
+              if (primary) {
+                return (
+                  <>
+                    <img 
+                      src={primary} 
+                      alt={m.name} 
+                      className="w-full h-full object-cover"
+                    />
+                    {secondary && (
+                      <img
+                        src={secondary}
+                        alt={`${m.name} secondary`}
+                        className="w-4 h-4 rounded-full object-cover shadow-sm absolute -right-0 -bottom-0 border border-background"
+                        style={{
+                          position: 'absolute',
+                          right: '0',
+                          bottom: '0',
+                        }}
+                      />
+                    )}
+                  </>
+                );
+              }
+
+              return (
+                <span className="text-accent-foreground font-bold">
+                  {m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                </span>
+              );
+            })()}
+          </div>
+          <div className="flex-1 grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Name</label>
+              <input 
+                value={m.name} 
+                onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
+                className="w-full px-2 py-1 rounded border border-border bg-background" 
+                disabled={isUploading}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Role</label>
+              <input 
+                value={m.role} 
+                onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
+                className="w-full px-2 py-1 rounded border border-border bg-background" 
+                disabled={isUploading}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={async (e)=>{ 
+                if(e.target.files && e.target.files[0]){ 
+                  await handleTeamImageUpload(idx, e.target.files[0]); 
+                } 
+              }} 
+              className="text-xs w-32"
+              disabled={isUploading}
+            />
+            <button 
+              onClick={()=>removeTeamMember(idx)} 
+              className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs"
+              disabled={isUploading}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+    <button 
+      onClick={addTeamMember} 
+      className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
+      disabled={isUploading}
+    >
+      Add Member
+    </button>
+  </div>
+</div>
               {/* Sponsors Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
