@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw } from "lucide-react";
+import { LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw, FolderPlus, FolderMinus, ImagePlus, Calendar, MapPin, Clock, GraduationCap, ExternalLink, Plus, Trash2, Edit, X, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import { loadSiteData, saveSiteData, resetSiteData, SiteData } from "@/lib/siteData";
 import { useToast } from "@/hooks/use-toast";
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { AboutSection } from "@/components/AboutSection";
 import { TeamSection } from "@/components/TeamSection";
+import { PortfolioSection } from "@/components/PortfolioSection";
+import { GallerySection } from "@/components/GallerySection";
+import { ActivitiesSection } from "@/components/ActivitiesSection";
 import { ContactSection } from "@/components/ContactSection";
 import { Footer } from "@/components/Footer";
-import { GallerySection } from "@/components/GallerySection";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -39,19 +41,40 @@ interface Sponsor {
   image: string;
 }
 
+interface PortfolioItem {
+  src: string;
+  title: string;
+  category: string;
+  date: string;
+}
+
+interface Activity {
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  description: string;
+}
+
+interface ExtracurricularActivity {
+  title: string;
+  description: string;
+  image: string;
+}
+
 interface GalleryImage {
   src: string;
   title: string;
 }
 
-interface GradeGallery {
-  grade: string;
+interface GalleryFolder {
+  name: string;
   images: GalleryImage[];
 }
 
-interface YearGallery {
+interface GalleryYear {
   year: string;
-  grades: GradeGallery[];
+  folders: GalleryFolder[];
 }
 
 export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
@@ -60,10 +83,13 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [selectedGalleryYear, setSelectedGalleryYear] = useState<string>("");
+  const [selectedGalleryFolder, setSelectedGalleryFolder] = useState<string>("");
+  const [galleryUploadFolder, setGalleryUploadFolder] = useState<string>("");
 
   // ✅ USING YOUR PRESET EVERYWHERE: enkomokazini-test
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inhi6kt';
-  const uploadPreset = 'enkomokazini-test'; // Using your preset directly everywhere
+  const uploadPreset = 'enkomokazini-test';
 
   useEffect(() => {
     console.log('🔧 Cloudinary Config:', {
@@ -73,7 +99,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       mode: import.meta.env.MODE
     });
     
-    // Test Cloudinary connection on load
     testCloudinaryConnection();
     
     const onUpdate = (e: CustomEvent) => {
@@ -91,7 +116,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       console.log('🔍 Testing Cloudinary connection with preset:', uploadPreset);
       
-      // Create a tiny test image
       const canvas = document.createElement('canvas');
       canvas.width = 2;
       canvas.height = 2;
@@ -109,10 +133,8 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       
       const formData = new FormData();
       formData.append('file', blob, 'test.png');
-      formData.append('upload_preset', uploadPreset); // Using your preset
+      formData.append('upload_preset', uploadPreset);
       formData.append('tags', 'enkomokazini_connection_test');
-      
-      console.log('Testing with preset:', uploadPreset);
       
       const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
         method: 'POST',
@@ -159,16 +181,16 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ UNIFIED UPLOAD FUNCTION USING YOUR PRESET
+  // ✅ UNIFIED UPLOAD FUNCTION
   const uploadImage = async (
     file: File, 
-    category: 'team' | 'sponsor' | 'hero' | 'school' | 'gallery', 
-    name?: string
+    category: 'team' | 'sponsor' | 'hero' | 'school' | 'gallery' | 'portfolio' | 'activities', 
+    name?: string,
+    folderPath?: string
   ): Promise<string> => {
     setIsUploading(true);
     
     try {
-      // Validate file
       if (!file || !file.type.startsWith('image/')) {
         toast({
           title: "Invalid file",
@@ -187,7 +209,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         return await fileToDataUrl(file);
       }
 
-      // If Cloudinary is disconnected, use local storage
       if (cloudinaryStatus === 'disconnected') {
         console.warn('Cloudinary disconnected, using local storage');
         const dataUrl = await fileToDataUrl(file);
@@ -200,12 +221,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         return dataUrl;
       }
 
-      // Define folder structure
-      const folder = `enkomokazini/${category}`;
+      const folder = folderPath ? `enkomokazini/${folderPath}` : `enkomokazini/${category}`;
       
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', uploadPreset); // Using your preset
+      formData.append('upload_preset', uploadPreset);
       formData.append('folder', folder);
       
       console.log('📤 Uploading to Cloudinary:', {
@@ -245,14 +265,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           variant: "destructive"
         });
         
-        // Fallback to data URL
         return await fileToDataUrl(file);
       }
       
     } catch (error: any) {
       console.error('❌ Upload error:', error);
       
-      // Fallback to data URL
       const dataUrl = await fileToDataUrl(file);
       
       toast({
@@ -273,7 +291,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     setIsUploading(true);
     
     try {
-      // Create a test image
       const canvas = document.createElement('canvas');
       canvas.width = 100;
       canvas.height = 100;
@@ -309,7 +326,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       
       const imageUrl = await uploadImage(file, 'school', 'test_image');
       
-      // Verify the URL
       const img = new Image();
       img.onload = () => {
         toast({
@@ -317,8 +333,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           description: `Preset "${uploadPreset}" is working!`,
         });
         console.log('Test image URL:', imageUrl);
-        
-        // Open in new tab to verify
         window.open(imageUrl, '_blank');
       };
       
@@ -358,7 +372,11 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           image: sponsor.image || ''
         })),
         services: editing.services || currentData.services || [],
-        ui: editing.ui || currentData.ui || {}
+        ui: editing.ui || currentData.ui || {},
+        portfolio: editing.portfolio || currentData.portfolio || [],
+        activities: editing.activities || currentData.activities || [],
+        extracurricular: editing.extracurricular || currentData.extracurricular || [],
+        gallery: editing.gallery || currentData.gallery || []
       };
       
       const savedData = saveSiteData(payload);
@@ -399,44 +417,428 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  // ✅ HERO IMAGES UPLOAD
-  const handleHeroImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ GALLERY MANAGEMENT
+  const addGalleryYear = () => {
+    const year = prompt("Enter year (e.g., 2024):");
+    if (!year) return;
+    
+    const gallery = editing.gallery || data.gallery || [];
+    if (gallery.some(y => y.year === year)) {
+      toast({
+        title: "Year exists",
+        description: `Year ${year} already exists`,
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const updatedGallery = [...gallery, { year, folders: [] }];
+    setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data, gallery: updatedGallery };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    setSelectedGalleryYear(year);
+    
+    toast({
+      title: "Year added",
+      description: `Added year ${year}`,
+    });
+  };
+
+  const removeGalleryYear = (year: string) => {
+    if (!confirm(`Delete year ${year} and all its folders?`)) return;
+    
+    const gallery = editing.gallery || data.gallery || [];
+    const updatedGallery = gallery.filter(y => y.year !== year);
+    setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data, gallery: updatedGallery };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    if (selectedGalleryYear === year) {
+      setSelectedGalleryYear("");
+      setSelectedGalleryFolder("");
+    }
+    
+    toast({
+      title: "Year removed",
+      description: `Removed year ${year}`,
+    });
+  };
+
+  const addGalleryFolder = () => {
+    if (!selectedGalleryYear) {
+      toast({
+        title: "Select year",
+        description: "Please select a year first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const folderName = prompt("Enter folder name (e.g., Grade 8, Staff):");
+    if (!folderName) return;
+    
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
+    
+    if (yearIndex === -1) return;
+    
+    const updatedGallery = [...gallery];
+    if (!updatedGallery[yearIndex].folders.some(f => f.name === folderName)) {
+      updatedGallery[yearIndex].folders.push({ name: folderName, images: [] });
+      setEditing({ ...editing, gallery: updatedGallery });
+      
+      const updatedData = { ...data };
+      if (!updatedData.gallery) updatedData.gallery = [];
+      const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+      if (dataYearIndex !== -1) {
+        updatedData.gallery[dataYearIndex].folders.push({ name: folderName, images: [] });
+      }
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+      
+      setSelectedGalleryFolder(folderName);
+      
+      toast({
+        title: "Folder added",
+        description: `Added folder ${folderName} to ${selectedGalleryYear}`,
+      });
+    } else {
+      toast({
+        title: "Folder exists",
+        description: `Folder ${folderName} already exists in ${selectedGalleryYear}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const removeGalleryFolder = (folderName: string) => {
+    if (!selectedGalleryYear) return;
+    
+    if (!confirm(`Delete folder ${folderName} and all its images?`)) return;
+    
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
+    
+    if (yearIndex === -1) return;
+    
+    const updatedGallery = [...gallery];
+    updatedGallery[yearIndex].folders = updatedGallery[yearIndex].folders.filter(f => f.name !== folderName);
+    setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data };
+    if (!updatedData.gallery) updatedData.gallery = [];
+    const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+    if (dataYearIndex !== -1) {
+      updatedData.gallery[dataYearIndex].folders = updatedData.gallery[dataYearIndex].folders.filter(f => f.name !== folderName);
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    if (selectedGalleryFolder === folderName) {
+      setSelectedGalleryFolder("");
+    }
+    
+    toast({
+      title: "Folder removed",
+      description: `Removed folder ${folderName}`,
+    });
+  };
+
+  const handleGalleryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, folderName?: string) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
+    const targetFolder = folderName || galleryUploadFolder;
+    if (!targetFolder) {
+      toast({
+        title: "Select folder",
+        description: "Please select a folder for upload",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!selectedGalleryYear) {
+      toast({
+        title: "Select year",
+        description: "Please select a year first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     toast({
-      title: "Uploading hero images...",
-      description: `Uploading ${files.length} image(s) using ${uploadPreset}`,
+      title: "Uploading gallery images...",
+      description: `Uploading ${files.length} image(s) to ${targetFolder} in ${selectedGalleryYear}`,
     });
     
     try {
-      const currentImages = editing.heroImages || data.heroImages || [];
-      const updatedImages = [...currentImages];
+      const gallery = editing.gallery || data.gallery || [];
+      const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
+      
+      if (yearIndex === -1) return;
+      
+      const folderIndex = gallery[yearIndex].folders.findIndex(f => f.name === targetFolder);
+      if (folderIndex === -1) return;
+      
+      const updatedGallery = [...gallery];
+      const currentImages = [...updatedGallery[yearIndex].folders[folderIndex].images];
       
       for (let i = 0; i < files.length; i++) {
-        const url = await uploadImage(files[i], 'hero', `hero_${updatedImages.length + i + 1}`);
-        updatedImages.push(url);
+        const folderPath = `gallery/${selectedGalleryYear}/${targetFolder}`;
+        const url = await uploadImage(files[i], 'gallery', `gallery_${Date.now()}`, folderPath);
+        const title = prompt(`Enter title for image ${i + 1}:`, files[i].name.replace(/\.[^/.]+$/, ""));
+        currentImages.push({ src: url, title: title || files[i].name });
       }
       
-      setEditing({ ...editing, heroImages: updatedImages });
+      updatedGallery[yearIndex].folders[folderIndex].images = currentImages;
+      setEditing({ ...editing, gallery: updatedGallery });
       
-      const updatedData = { ...data, heroImages: updatedImages };
+      const updatedData = { ...data };
+      if (!updatedData.gallery) updatedData.gallery = [];
+      const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+      if (dataYearIndex !== -1) {
+        const dataFolderIndex = updatedData.gallery[dataYearIndex].folders.findIndex(f => f.name === targetFolder);
+        if (dataFolderIndex !== -1) {
+          updatedData.gallery[dataYearIndex].folders[dataFolderIndex].images = currentImages;
+        }
+      }
       saveSiteData(updatedData);
       window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
-        title: "Hero images uploaded",
-        description: `Added ${files.length} image(s) successfully`,
+        title: "Gallery images uploaded",
+        description: `Added ${files.length} image(s) to ${targetFolder}`,
       });
     } catch (error) {
       toast({
         title: "Upload failed",
-        description: "Failed to upload some hero images",
+        description: "Failed to upload gallery images",
         variant: "destructive"
       });
     }
     
     e.target.value = '';
+  };
+
+  const removeGalleryImage = (folderName: string, imageIndex: number) => {
+    if (!selectedGalleryYear) return;
+    
+    if (!confirm("Delete this image?")) return;
+    
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
+    
+    if (yearIndex === -1) return;
+    
+    const folderIndex = gallery[yearIndex].folders.findIndex(f => f.name === folderName);
+    if (folderIndex === -1) return;
+    
+    const updatedGallery = [...gallery];
+    const images = [...updatedGallery[yearIndex].folders[folderIndex].images];
+    images.splice(imageIndex, 1);
+    updatedGallery[yearIndex].folders[folderIndex].images = images;
+    setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data };
+    if (!updatedData.gallery) updatedData.gallery = [];
+    const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+    if (dataYearIndex !== -1) {
+      const dataFolderIndex = updatedData.gallery[dataYearIndex].folders.findIndex(f => f.name === folderName);
+      if (dataFolderIndex !== -1) {
+        updatedData.gallery[dataYearIndex].folders[dataFolderIndex].images = images;
+      }
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Image removed",
+      description: "Gallery image removed",
+    });
+  };
+
+  // ✅ PORTFOLIO MANAGEMENT
+  const addPortfolioItem = () => {
+    const portfolio = editing.portfolio || data.portfolio || [];
+    const newItem: PortfolioItem = {
+      src: "",
+      title: "New Portfolio Item",
+      category: "All",
+      date: new Date().toISOString().split('T')[0]
+    };
+    
+    const updatedPortfolio = [...portfolio, newItem];
+    setEditing({ ...editing, portfolio: updatedPortfolio });
+    
+    const updatedData = { ...data, portfolio: updatedPortfolio };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Portfolio item added",
+      description: "New portfolio item added",
+    });
+  };
+
+  const updatePortfolioItem = (index: number, value: Partial<PortfolioItem>) => {
+    const portfolio = editing.portfolio || data.portfolio || [];
+    const updatedPortfolio = [...portfolio];
+    updatedPortfolio[index] = { ...updatedPortfolio[index], ...value };
+    setEditing({ ...editing, portfolio: updatedPortfolio });
+    
+    const updatedData = { ...data };
+    if (!updatedData.portfolio) updatedData.portfolio = [];
+    updatedData.portfolio[index] = { ...updatedData.portfolio[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+  };
+
+  const removePortfolioItem = (index: number) => {
+    const portfolio = editing.portfolio || data.portfolio || [];
+    const updatedPortfolio = [...portfolio];
+    updatedPortfolio.splice(index, 1);
+    setEditing({ ...editing, portfolio: updatedPortfolio });
+    
+    const updatedData = { ...data, portfolio: updatedPortfolio };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Portfolio item removed",
+      description: "Portfolio item removed",
+    });
+  };
+
+  const handlePortfolioImageUpload = async (index: number, file?: File) => {
+    if (!file) return;
+    
+    try {
+      const url = await uploadImage(file, 'portfolio', `portfolio_${Date.now()}`);
+      updatePortfolioItem(index, { src: url });
+    } catch (error) {
+      // Error already handled in uploadImage
+    }
+  };
+
+  // ✅ ACTIVITIES MANAGEMENT
+  const addActivity = () => {
+    const activities = editing.activities || data.activities || [];
+    const newActivity: Activity = {
+      title: "New Activity",
+      date: "January (TBC)",
+      time: "T.B.C",
+      location: "Enkomokazini Technical High School",
+      description: ""
+    };
+    
+    const updatedActivities = [...activities, newActivity];
+    setEditing({ ...editing, activities: updatedActivities });
+    
+    const updatedData = { ...data, activities: updatedActivities };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Activity added",
+      description: "New activity added",
+    });
+  };
+
+  const updateActivity = (index: number, value: Partial<Activity>) => {
+    const activities = editing.activities || data.activities || [];
+    const updatedActivities = [...activities];
+    updatedActivities[index] = { ...updatedActivities[index], ...value };
+    setEditing({ ...editing, activities: updatedActivities });
+    
+    const updatedData = { ...data };
+    if (!updatedData.activities) updatedData.activities = [];
+    updatedData.activities[index] = { ...updatedData.activities[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+  };
+
+  const removeActivity = (index: number) => {
+    const activities = editing.activities || data.activities || [];
+    const updatedActivities = [...activities];
+    updatedActivities.splice(index, 1);
+    setEditing({ ...editing, activities: updatedActivities });
+    
+    const updatedData = { ...data, activities: updatedActivities };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Activity removed",
+      description: "Activity removed",
+    });
+  };
+
+  // ✅ EXTRACURRICULAR ACTIVITIES MANAGEMENT
+  const addExtracurricularActivity = () => {
+    const extracurricular = editing.extracurricular || data.extracurricular || [];
+    const newActivity: ExtracurricularActivity = {
+      title: "New Extracurricular Activity",
+      description: "Activity description",
+      image: ""
+    };
+    
+    const updatedExtracurricular = [...extracurricular, newActivity];
+    setEditing({ ...editing, extracurricular: updatedExtracurricular });
+    
+    const updatedData = { ...data, extracurricular: updatedExtracurricular };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Extracurricular activity added",
+      description: "New extracurricular activity added",
+    });
+  };
+
+  const updateExtracurricularActivity = (index: number, value: Partial<ExtracurricularActivity>) => {
+    const extracurricular = editing.extracurricular || data.extracurricular || [];
+    const updatedExtracurricular = [...extracurricular];
+    updatedExtracurricular[index] = { ...updatedExtracurricular[index], ...value };
+    setEditing({ ...editing, extracurricular: updatedExtracurricular });
+    
+    const updatedData = { ...data };
+    if (!updatedData.extracurricular) updatedData.extracurricular = [];
+    updatedData.extracurricular[index] = { ...updatedData.extracurricular[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+  };
+
+  const removeExtracurricularActivity = (index: number) => {
+    const extracurricular = editing.extracurricular || data.extracurricular || [];
+    const updatedExtracurricular = [...extracurricular];
+    updatedExtracurricular.splice(index, 1);
+    setEditing({ ...editing, extracurricular: updatedExtracurricular });
+    
+    const updatedData = { ...data, extracurricular: updatedExtracurricular };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
+    toast({
+      title: "Extracurricular activity removed",
+      description: "Extracurricular activity removed",
+    });
+  };
+
+  const handleExtracurricularImageUpload = async (index: number, file?: File) => {
+    if (!file) return;
+    
+    try {
+      const url = await uploadImage(file, 'activities', `activity_${Date.now()}`);
+      updateExtracurricularActivity(index, { image: url });
+    } catch (error) {
+      // Error already handled in uploadImage
+    }
   };
 
   // ✅ TEAM MEMBER HANDLERS
@@ -526,6 +928,46 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
+  // ✅ HERO IMAGES UPLOAD
+  const handleHeroImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    toast({
+      title: "Uploading hero images...",
+      description: `Uploading ${files.length} image(s) using ${uploadPreset}`,
+    });
+    
+    try {
+      const currentImages = editing.heroImages || data.heroImages || [];
+      const updatedImages = [...currentImages];
+      
+      for (let i = 0; i < files.length; i++) {
+        const url = await uploadImage(files[i], 'hero', `hero_${updatedImages.length + i + 1}`);
+        updatedImages.push(url);
+      }
+      
+      setEditing({ ...editing, heroImages: updatedImages });
+      
+      const updatedData = { ...data, heroImages: updatedImages };
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+      
+      toast({
+        title: "Hero images uploaded",
+        description: `Added ${files.length} image(s) successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload some hero images",
+        variant: "destructive"
+      });
+    }
+    
+    e.target.value = '';
+  };
+
   // ✅ SERVICES HANDLERS
   const addService = () => {
     const s = editing.services ? [...editing.services] : [];
@@ -587,46 +1029,6 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ GALLERY IMAGES UPLOAD
-  const handleGalleryImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    toast({
-      title: "Uploading gallery images...",
-      description: `Uploading ${files.length} image(s) using ${uploadPreset}`,
-    });
-    
-    try {
-      const currentGallery = editing.galleryImages || data.galleryImages || [];
-      const updatedGallery = [...currentGallery];
-      
-      for (let i = 0; i < files.length; i++) {
-        const url = await uploadImage(files[i], 'gallery', `gallery_${updatedGallery.length + i + 1}`);
-        updatedGallery.push({ src: url, title: `Gallery Image ${updatedGallery.length + i + 1}` });
-      }
-      
-      setEditing({ ...editing, galleryImages: updatedGallery });
-      
-      const updatedData = { ...data, galleryImages: updatedGallery };
-      saveSiteData(updatedData);
-      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
-      
-      toast({
-        title: "Gallery images uploaded",
-        description: `Added ${files.length} image(s) successfully`,
-      });
-    } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload some gallery images",
-        variant: "destructive"
-      });
-    }
-    
-    e.target.value = '';
-  };
-
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
@@ -655,21 +1057,16 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
-  const removeGalleryImage = (index: number) => {
-    const currentImages = editing.galleryImages || data.galleryImages || [];
-    const newImages = [...currentImages];
-    newImages.splice(index, 1);
-    setEditing({ ...editing, galleryImages: newImages });
-    
-    const updatedData = { ...data, galleryImages: newImages };
-    saveSiteData(updatedData);
-    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
-  };
-
   const refreshCloudinaryConnection = async () => {
     setCloudinaryStatus('checking');
     await testCloudinaryConnection();
   };
+
+  // Get gallery data
+  const galleryData = editing.gallery || data.gallery || [];
+  const portfolioData = editing.portfolio || data.portfolio || [];
+  const activitiesData = editing.activities || data.activities || [];
+  const extracurricularData = editing.extracurricular || data.extracurricular || [];
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -874,128 +1271,443 @@ Upload Preset: ${uploadPreset}`}
                 />
               </div>
 
+              {/* Portfolio Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Portfolio Items</label>
+                  <button 
+                    onClick={addPortfolioItem}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
+                    disabled={isUploading}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {portfolioData.map((item, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={item.title} 
+                          onChange={(e)=>updatePortfolioItem(idx, { title: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <select 
+                          value={item.category} 
+                          onChange={(e)=>updatePortfolioItem(idx, { category: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background"
+                          disabled={isUploading}
+                        >
+                          <option value="All">All</option>
+                          <option value="Awards">Awards</option>
+                          <option value="Tours">Tours</option>
+                          <option value="Sports">Sports</option>
+                          <option value="Cultural">Cultural</option>
+                          <option value="Academic">Academic</option>
+                        </select>
+                        <button 
+                          onClick={()=>removePortfolioItem(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          type="date"
+                          value={item.date} 
+                          onChange={(e)=>updatePortfolioItem(idx, { date: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          disabled={isUploading}
+                        />
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              await handlePortfolioImageUpload(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {item.src && (
+                        <img 
+                          src={getImageSrc(item.src)} 
+                          alt={item.title} 
+                          className="h-20 w-full object-cover rounded border border-border mt-2"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Activities Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Activities</label>
+                  <button 
+                    onClick={addActivity}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
+                    disabled={isUploading}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {activitiesData.map((activity, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          value={activity.title} 
+                          onChange={(e)=>updateActivity(idx, { title: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={activity.date} 
+                          onChange={(e)=>updateActivity(idx, { date: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Date"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          value={activity.time} 
+                          onChange={(e)=>updateActivity(idx, { time: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Time"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={activity.location} 
+                          onChange={(e)=>updateActivity(idx, { location: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Location"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <textarea 
+                          value={activity.description} 
+                          onChange={(e)=>updateActivity(idx, { description: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Description"
+                          rows={2}
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeActivity(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Extracurricular Activities */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Extracurricular Activities</label>
+                  <button 
+                    onClick={addExtracurricularActivity}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
+                    disabled={isUploading}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {extracurricularData.map((activity, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={activity.title} 
+                          onChange={(e)=>updateExtracurricularActivity(idx, { title: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeExtracurricularActivity(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <textarea 
+                        value={activity.description} 
+                        onChange={(e)=>updateExtracurricularActivity(idx, { description: e.target.value })} 
+                        className="w-full px-2 py-1 rounded border border-border bg-background mb-2" 
+                        placeholder="Description"
+                        rows={2}
+                        disabled={isUploading}
+                      />
+                      <div className="flex gap-2">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              await handleExtracurricularImageUpload(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {activity.image && (
+                        <img 
+                          src={getImageSrc(activity.image)} 
+                          alt={activity.title} 
+                          className="h-20 w-full object-cover rounded border border-border mt-2"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gallery Management */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Gallery Management</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addGalleryYear}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Year
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Year Selection */}
+                <div className="mb-3">
+                  <label className="block text-xs text-muted-foreground mb-1">Select Year</label>
+                  <div className="flex flex-wrap gap-1">
+                    {galleryData.map((year) => (
+                      <button
+                        key={year.year}
+                        onClick={() => {
+                          setSelectedGalleryYear(year.year);
+                          setSelectedGalleryFolder("");
+                        }}
+                        className={`px-3 py-1 rounded text-sm ${
+                          selectedGalleryYear === year.year
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-background border border-border"
+                        }`}
+                        disabled={isUploading}
+                      >
+                        {year.year}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeGalleryYear(year.year);
+                          }}
+                          className="ml-1 text-xs hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {selectedGalleryYear && (
+                  <>
+                    {/* Folder Management */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-muted-foreground">Folders in {selectedGalleryYear}</label>
+                        <button 
+                          onClick={addGalleryFolder}
+                          className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-xs"
+                          disabled={isUploading}
+                        >
+                          <FolderPlus size={12} /> Add Folder
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {galleryData.find(y => y.year === selectedGalleryYear)?.folders.map((folder) => (
+                          <button
+                            key={folder.name}
+                            onClick={() => {
+                              setSelectedGalleryFolder(folder.name);
+                              setGalleryUploadFolder(folder.name);
+                            }}
+                            className={`px-3 py-1 rounded text-sm flex items-center gap-1 ${
+                              selectedGalleryFolder === folder.name
+                                ? "bg-accent text-accent-foreground"
+                                : "bg-background border border-border"
+                            }`}
+                            disabled={isUploading}
+                          >
+                            <FolderOpen size={12} />
+                            {folder.name}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeGalleryFolder(folder.name);
+                              }}
+                              className="ml-1 text-xs hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Image Upload for Selected Folder */}
+                    {selectedGalleryFolder && (
+                      <div className="mb-3">
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Upload to {selectedGalleryFolder}
+                        </label>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          multiple 
+                          onChange={(e) => handleGalleryImageUpload(e, selectedGalleryFolder)} 
+                          className="w-full text-sm"
+                          disabled={isUploading}
+                        />
+                      </div>
+                    )}
+
+                    {/* Folder Images Display */}
+                    {selectedGalleryFolder && (
+                      <div className="mt-3">
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Images in {selectedGalleryFolder}
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {galleryData.find(y => y.year === selectedGalleryYear)
+                            ?.folders.find(f => f.name === selectedGalleryFolder)
+                            ?.images.map((image, idx) => (
+                              <div key={idx} className="relative">
+                                <img 
+                                  src={getImageSrc(image.src)} 
+                                  alt={image.title} 
+                                  className="h-20 w-full object-cover rounded border border-border"
+                                />
+                                <div className="text-xs mt-1 truncate">{image.title}</div>
+                                <button
+                                  onClick={() => removeGalleryImage(selectedGalleryFolder, idx)}
+                                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-destructive/90"
+                                  disabled={isUploading}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* Team Members Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-foreground">Team Members</label>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    cloudinaryStatus === 'connected' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 gap-2">
-                    {(editing.team || data.team || []).map((m, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
-                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0 relative">
-                          {((): React.ReactNode => {
-                            const resolveImageUrl = (val?: string) => {
-                              if (!val) return undefined;
-                              // already a data URL (base64), return as-is
-                              if (val.startsWith("data:")) return val;
-                              // absolute URLs
-                              if (/^https?:\/\//i.test(val)) return val;
-                              // already an absolute path on site
-                              if (val.startsWith('/')) return val;
-                              // relative paths that explicitly point to assets
-                              if (val.startsWith('./') || val.startsWith('../')) return val;
-                              // if it already begins with 'assets/', prefix a leading slash
-                              if (val.startsWith('assets/')) return `/${val}`;
-                              // otherwise assume it's a filename inside /assets/
-                              return `/assets/${val}`;
-                            };
-
-                            const primary = resolveImageUrl(m.image) || m.image;
-                            const secondary = resolveImageUrl(m.secondaryImage) || m.secondaryImage;
-
-                            if (primary) {
-                              return (
-                                <>
-                                  <img 
-                                    src={primary} 
-                                    alt={m.name} 
-                                    className="w-full h-full object-cover"
-                                    style={{
-                                      objectFit: (m as any).imageFit || 'cover',
-                                      objectPosition: (m as any).imagePosition || 'center',
-                                    }}
-                                  />
-                                  {secondary ? (
-                                    <img
-                                      src={secondary}
-                                      alt={`${m.name} secondary`}
-                                      className="w-4 h-4 rounded-full object-cover shadow-sm absolute -right-0 -bottom-0 border border-background"
-                                      style={{
-                                        position: 'absolute',
-                                        right: '0',
-                                        bottom: '0',
-                                      }}
-                                    />
-                                  ) : null}
-                                </>
-                              );
-                            }
-
-                            return (
-                              <span className="text-accent-foreground font-bold">
-                                {m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex-1 grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-muted-foreground">Name</label>
-                            <input 
-                              value={m.name} 
-                              onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
-                              className="w-full px-2 py-1 rounded border border-border bg-background" 
-                              disabled={isUploading}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-muted-foreground">Role</label>
-                            <input 
-                              value={m.role} 
-                              onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
-                              className="w-full px-2 py-1 rounded border border-border bg-background" 
-                              disabled={isUploading}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={async (e)=>{ 
-                              if(e.target.files && e.target.files[0]){ 
-                                await handleTeamImageUpload(idx, e.target.files[0]); 
-                              } 
-                            }} 
-                            className="text-xs w-32"
-                            disabled={isUploading}
-                          />
-                          <button 
-                            onClick={()=>removeTeamMember(idx)} 
-                            className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs"
-                            disabled={isUploading}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                   <button 
-                    onClick={addTeamMember} 
-                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
+                    onClick={addTeamMember}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
                     disabled={isUploading}
                   >
-                    Add Member
+                    <Plus size={14} /> Add
                   </button>
+                </div>
+                <div className="space-y-2">
+                  {(editing.team || data.team || []).map((m, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={m.name} 
+                          onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Name"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={m.role} 
+                          onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Role"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeTeamMember(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              await handleTeamImageUpload(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          placeholder="Profile Image"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              const url = await uploadImage(e.target.files[0], 'team', `secondary_${m.name}`);
+                              updateTeamMember(idx, { secondaryImage: url });
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          placeholder="Secondary Image"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {(m.image || m.secondaryImage) && (
+                        <div className="flex gap-2 mt-2">
+                          {m.image && (
+                            <img 
+                              src={getImageSrc(m.image)} 
+                              alt={m.name} 
+                              className="h-20 w-20 object-cover rounded border border-border"
+                            />
+                          )}
+                          {m.secondaryImage && (
+                            <img 
+                              src={getImageSrc(m.secondaryImage)} 
+                              alt={`${m.name} secondary`} 
+                              className="h-20 w-20 object-cover rounded border border-border"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1003,61 +1715,41 @@ Upload Preset: ${uploadPreset}`}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-foreground">Sponsors</label>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    cloudinaryStatus === 'connected' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
-                  </span>
+                  <button 
+                    onClick={addSponsor}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm"
+                    disabled={isUploading}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
                 </div>
                 <div className="space-y-2">
                   {(editing.sponsors || data.sponsors || []).map((s, idx) => (
-                    <div key={idx} className="flex gap-2 items-center p-2 border border-border rounded">
-                      <div className="w-16 h-16 rounded border border-border overflow-hidden bg-gray-50 flex items-center justify-center flex-shrink-0">
-                        {s.image ? (
-                          <img 
-                            src={s.image}
-                            alt={s.name} 
-                            className="w-full h-full object-contain p-1"
-                            onError={(e) => {
-                              const img = e.target as HTMLImageElement;
-                              img.style.display = 'none';
-                              const parent = img.parentElement;
-                              if (parent) {
-                                const span = document.createElement('span');
-                                span.className = 'text-gray-400 text-xs';
-                                span.textContent = 'Logo';
-                                parent.appendChild(span);
-                              }
-                            }}
-                          />
-                        ) : (
-                          <span className="text-gray-400 text-xs">Logo</span>
-                        )}
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={s.name} 
+                          onChange={(e)=>updateSponsor(idx, { name: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Name"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={s.url} 
+                          onChange={(e)=>updateSponsor(idx, { url: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Website URL"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeSponsor(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                      <div className="flex-1 grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs text-muted-foreground">Name</label>
-                          <input 
-                            value={s.name} 
-                            onChange={(e)=>updateSponsor(idx, { name: e.target.value })} 
-                            className="w-full px-2 py-1 rounded border border-border bg-background" 
-                            disabled={isUploading}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">Website</label>
-                          <input 
-                            value={s.url || ""} 
-                            onChange={(e)=>updateSponsor(idx, { url: e.target.value })} 
-                            className="w-full px-2 py-1 rounded border border-border bg-background" 
-                            placeholder="https://..." 
-                            disabled={isUploading}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center gap-1">
+                      <div className="flex gap-2">
                         <input 
                           type="file" 
                           accept="image/*" 
@@ -1066,33 +1758,26 @@ Upload Preset: ${uploadPreset}`}
                               await handleSponsorImage(idx, e.target.files[0]); 
                             } 
                           }} 
-                          className="text-xs w-32"
+                          className="text-sm flex-1"
                           disabled={isUploading}
                         />
-                        <button 
-                          onClick={()=>removeSponsor(idx)} 
-                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-xs"
-                          disabled={isUploading}
-                        >
-                          Remove
-                        </button>
                       </div>
+                      {s.image && (
+                        <img 
+                          src={getImageSrc(s.image)} 
+                          alt={s.name} 
+                          className="h-20 w-full object-contain rounded border border-border mt-2 bg-gray-50 p-2"
+                        />
+                      )}
                     </div>
                   ))}
-                  <button 
-                    onClick={addSponsor} 
-                    className="mt-2 px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
-                    disabled={isUploading}
-                  >
-                    Add Sponsor
-                  </button>
                 </div>
               </div>
 
               {/* Hero Images Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-foreground">Hero Images (upload multiple)</label>
+                  <label className="block text-sm font-medium text-foreground">Hero Images</label>
                   <span className={`text-xs px-2 py-1 rounded ${
                     cloudinaryStatus === 'connected' 
                       ? 'bg-green-100 text-green-800' 
@@ -1116,10 +1801,6 @@ Upload Preset: ${uploadPreset}`}
                         src={getImageSrc(u)} 
                         alt={`hero-${i}`} 
                         className="h-20 w-32 object-cover rounded border border-border"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2Uge2krMX08L3RleHQ+PC9zdmc+';
-                        }}
                       />
                       <button
                         onClick={() => removeHeroImage(i)}
@@ -1136,57 +1817,10 @@ Upload Preset: ${uploadPreset}`}
                 </p>
               </div>
 
-              {/* Gallery Images Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-foreground">Gallery Images (upload multiple)</label>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    cloudinaryStatus === 'connected' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
-                  </span>
-                </div>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  multiple 
-                  onChange={handleGalleryImagesUpload} 
-                  className="w-full"
-                  disabled={isUploading}
-                />
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  {(editing.galleryImages || data.galleryImages || []).map((image, i)=> (
-                    <div key={i} className="relative">
-                      <img 
-                        src={getImageSrc(image.src)} 
-                        alt={`gallery-${i}`} 
-                        className="h-20 w-32 object-cover rounded border border-border"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+R2FsbGVyeSB7aSsxfTwvdGV4dD48L3N2Zz4=';
-                        }}
-                      />
-                      <button
-                        onClick={() => removeGalleryImage(i)}
-                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-destructive/90"
-                        disabled={isUploading}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {(editing.galleryImages || data.galleryImages || []).length} gallery images
-                </p>
-              </div>
-
               {/* School Image Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-foreground">School Image (used in About)</label>
+                  <label className="block text-sm font-medium text-foreground">School Image</label>
                   <span className={`text-xs px-2 py-1 rounded ${
                     cloudinaryStatus === 'connected' 
                       ? 'bg-green-100 text-green-800' 
@@ -1213,10 +1847,6 @@ Upload Preset: ${uploadPreset}`}
                     )} 
                     alt="school" 
                     className="h-28 w-full object-cover rounded border border-border"
-                    onError={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2Nob29sPC90ZXh0Pjwvc3ZnPg==';
-                    }}
                   />
                 </div>
               </div>
@@ -1397,10 +2027,16 @@ Upload Preset: ${uploadPreset}`}
               <AboutSection />
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card border border-border">
-              <TeamSection />
+              <PortfolioSection />
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <GallerySection />
+            </div>
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
+              <TeamSection />
+            </div>
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
+              <ActivitiesSection />
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <ContactSection />
