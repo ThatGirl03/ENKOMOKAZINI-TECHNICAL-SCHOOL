@@ -29,7 +29,6 @@ interface TeamMember {
   role: string;
   image: string;
   initials?: string;
-  secondaryImage?: string;
 }
 
 interface Sponsor {
@@ -429,8 +428,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     t.push({ 
       name: "New Member", 
       role: "Team Role", 
-      image: "",
-      secondaryImage: ""
+      image: ""
     });
     setEditing({ ...editing, team: t });
   };
@@ -574,18 +572,21 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const getImageSrc = (url: string | undefined): string => {
     if (!url) return '';
     
-    // already a data URL (base64), return as-is
-    if (url.startsWith("data:")) return url;
-    // absolute URLs
-    if (/^https?:\/\//i.test(url)) return url;
-    // already an absolute path on site
-    if (url.startsWith('/')) return url;
-    // relative paths that explicitly point to assets
-    if (url.startsWith('./') || url.startsWith('../')) return url;
-    // if it already begins with 'assets/', prefix a leading slash
-    if (url.startsWith('assets/')) return `/${url}`;
-    // otherwise assume it's a filename inside /assets/
-    return `/assets/${url}`;
+    if (url.startsWith('data:image') || 
+        url.startsWith('http') || 
+        url.includes('cloudinary.com')) {
+      return url;
+    }
+    
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return url;
+    }
+    
+    if (url && !url.includes('/') && url.includes('.')) {
+      return `/assets/${url}`;
+    }
+    
+    return url || '';
   };
 
   const removeHeroImage = (index: number) => {
@@ -823,61 +824,30 @@ Upload Preset: ${uploadPreset}`}
                   <div className="grid grid-cols-1 gap-2">
                     {(editing.team || data.team || []).map((m, idx) => (
                       <div key={idx} className="flex items-center gap-2 p-2 border border-border rounded">
-                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0 relative">
-                          {((): React.ReactNode => {
-                            const resolveImageUrl = (val?: string) => {
-                              if (!val) return undefined;
-                              // already a data URL (base64), return as-is
-                              if (val.startsWith("data:")) return val;
-                              // absolute URLs
-                              if (/^https?:\/\//i.test(val)) return val;
-                              // already an absolute path on site
-                              if (val.startsWith('/')) return val;
-                              // relative paths that explicitly point to assets
-                              if (val.startsWith('./') || val.startsWith('../')) return val;
-                              // if it already begins with 'assets/', prefix a leading slash
-                              if (val.startsWith('assets/')) return `/${val}`;
-                              // otherwise assume it's a filename inside /assets/
-                              return `/assets/${val}`;
-                            };
-
-                            const primary = resolveImageUrl(m.image) || m.image;
-                            const secondary = resolveImageUrl(m.secondaryImage) || m.secondaryImage;
-
-                            if (primary) {
-                              return (
-                                <>
-                                  <img 
-                                    src={primary} 
-                                    alt={m.name} 
-                                    className="w-full h-full object-cover"
-                                    style={{
-                                      objectFit: (m as any).imageFit || 'cover',
-                                      objectPosition: (m as any).imagePosition || 'center',
-                                    }}
-                                  />
-                                  {secondary ? (
-                                    <img
-                                      src={secondary}
-                                      alt={`${m.name} secondary`}
-                                      className="w-4 h-4 rounded-full object-cover shadow-sm absolute -right-0 -bottom-0 border border-background"
-                                      style={{
-                                        position: 'absolute',
-                                        right: '0',
-                                        bottom: '0',
-                                      }}
-                                    />
-                                  ) : null}
-                                </>
-                              );
-                            }
-
-                            return (
-                              <span className="text-accent-foreground font-bold">
-                                {m.initials || m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                              </span>
-                            );
-                          })()}
+                        <div className="w-12 h-12 rounded-full bg-primary overflow-hidden flex items-center justify-center flex-shrink-0">
+                          {m.image ? (
+                            <img 
+                              src={getImageSrc(m.image)} 
+                              alt={m.name} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.style.display = 'none';
+                                const parent = img.parentElement;
+                                if (parent) {
+                                  const initials = m.name.split(' ').map(n=>n[0]).slice(0,2).join('');
+                                  const span = document.createElement('span');
+                                  span.className = 'text-accent-foreground font-bold';
+                                  span.textContent = initials;
+                                  parent.appendChild(span);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="text-accent-foreground font-bold">
+                              {m.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                            </span>
+                          )}
                         </div>
                         <div className="flex-1 grid grid-cols-2 gap-2">
                           <div>
@@ -950,7 +920,7 @@ Upload Preset: ${uploadPreset}`}
                       <div className="w-16 h-16 rounded border border-border overflow-hidden bg-gray-50 flex items-center justify-center flex-shrink-0">
                         {s.image ? (
                           <img 
-                            src={s.image}
+                            src={getImageSrc(s.image)} 
                             alt={s.name} 
                             className="w-full h-full object-contain p-1"
                             onError={(e) => {
