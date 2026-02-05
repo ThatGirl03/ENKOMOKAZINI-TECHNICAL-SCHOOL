@@ -41,15 +41,25 @@ export const TeamSection = () => {
             >
               <div className="relative w-24 h-24 mx-auto mb-4">
                 {
-                  (() => {
-                    const toUrl = (val?: string) => {
+                    (() => {
+                    const resolveImageUrl = (val?: string) => {
                       if (!val) return undefined;
+                      // already a data URL (base64), return as-is
+                      if (val.startsWith("data:")) return val;
+                      // absolute URLs
+                      if (/^https?:\/\//i.test(val)) return val;
+                      // already an absolute path on site
                       if (val.startsWith('/')) return val;
+                      // relative paths that explicitly point to assets
+                      if (val.startsWith('./') || val.startsWith('../')) return val;
+                      // if it already begins with 'assets/', prefix a leading slash
+                      if (val.startsWith('assets/')) return `/${val}`;
+                      // otherwise assume it's a filename inside /assets/
                       return `/assets/${val}`;
                     };
 
-                    const primary = toUrl(member.image) || member.image;
-                    const secondary = toUrl((member as any).secondaryImage) || (member as any).secondaryImage;
+                    const primary = resolveImageUrl(member.image) || member.image;
+                    const secondary = resolveImageUrl((member as any).secondaryImage) || (member as any).secondaryImage;
 
                     if (primary) {
                       return (
