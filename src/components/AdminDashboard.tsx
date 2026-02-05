@@ -3,9 +3,7 @@ import {
   LogOut, Bell, Settings, UploadCloud, CloudOff, RefreshCw, 
   FolderPlus, FolderMinus, ImagePlus, Calendar, MapPin, Clock, 
   GraduationCap, ExternalLink, Plus, Trash2, Edit, X, FolderOpen, 
-  ChevronLeft, ChevronRight, Save, Loader2, Eye, Grid, List, 
-  Filter, Users, Trophy, Music, Gamepad2, Mic, BookOpen, 
-  Camera, Home, Briefcase, Heart
+  ChevronLeft, ChevronRight, Save
 } from "lucide-react";
 import { loadSiteData, saveSiteData, resetSiteData, SiteData } from "@/lib/siteData";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +37,7 @@ interface TeamMember {
   role: string;
   image: string;
   initials?: string;
-  bio?: string;
+  secondaryImage?: string;
 }
 
 interface Sponsor {
@@ -54,7 +52,6 @@ interface PortfolioItem {
   title: string;
   category: string;
   date: string;
-  description?: string;
 }
 
 interface Activity {
@@ -64,20 +61,17 @@ interface Activity {
   time: string;
   location: string;
   description: string;
-  category?: string; // "main" or "extracurricular"
+  category?: string;
   season?: string;
-  customSeason?: string;
 }
 
 interface GalleryImage {
   id: string;
   src: string;
   title: string;
-  description?: string;
 }
 
 interface GalleryFolder {
-  id: string;
   name: string;
   images: GalleryImage[];
 }
@@ -93,13 +87,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [cloudinaryStatus, setCloudinaryStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
-  const [activeTab, setActiveTab] = useState<'basic' | 'portfolio' | 'activities' | 'gallery' | 'team' | 'sponsors' | 'hero'>('basic');
   const [selectedGalleryYear, setSelectedGalleryYear] = useState<string>("");
   const [selectedGalleryFolder, setSelectedGalleryFolder] = useState<string>("");
   const [galleryUploadFolder, setGalleryUploadFolder] = useState<string>("");
-  const [portfolioFilter, setPortfolioFilter] = useState<string>("All");
-  const [editActivityId, setEditActivityId] = useState<string | null>(null);
-  const [editPortfolioId, setEditPortfolioId] = useState<string | null>(null);
 
   // ✅ USING YOUR PRESET EVERYWHERE: enkomokazini-test
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dn2inhi6kt';
@@ -430,15 +420,28 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  // ✅ GALLERY MANAGEMENT - CLEANER VERSION
-  const galleryData = editing.gallery || data.gallery || [];
-  
+  // ✅ GALLERY MANAGEMENT
   const addGalleryYear = () => {
     const year = prompt("Enter year (e.g., 2024):");
     if (!year) return;
     
-    const updatedGallery = [...galleryData, { year, folders: [] }];
+    const gallery = editing.gallery || data.gallery || [];
+    if (gallery.some(y => y.year === year)) {
+      toast({
+        title: "Year exists",
+        description: `Year ${year} already exists`,
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const updatedGallery = [...gallery, { year, folders: [] }];
     setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data, gallery: updatedGallery };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
+    
     setSelectedGalleryYear(year);
     
     toast({
@@ -450,8 +453,13 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const removeGalleryYear = (year: string) => {
     if (!confirm(`Delete year ${year} and all its folders?`)) return;
     
-    const updatedGallery = galleryData.filter(y => y.year !== year);
+    const gallery = editing.gallery || data.gallery || [];
+    const updatedGallery = gallery.filter(y => y.year !== year);
     setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data, gallery: updatedGallery };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     if (selectedGalleryYear === year) {
       setSelectedGalleryYear("");
@@ -477,18 +485,24 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const folderName = prompt("Enter folder name (e.g., Grade 8, Staff):");
     if (!folderName) return;
     
-    const updatedGallery = [...galleryData];
-    const yearIndex = updatedGallery.findIndex(y => y.year === selectedGalleryYear);
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
     
     if (yearIndex === -1) return;
     
+    const updatedGallery = [...gallery];
     if (!updatedGallery[yearIndex].folders.some(f => f.name === folderName)) {
-      updatedGallery[yearIndex].folders.push({ 
-        id: `folder_${Date.now()}`, 
-        name: folderName, 
-        images: [] 
-      });
+      updatedGallery[yearIndex].folders.push({ name: folderName, images: [] });
       setEditing({ ...editing, gallery: updatedGallery });
+      
+      const updatedData = { ...data };
+      if (!updatedData.gallery) updatedData.gallery = [];
+      const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+      if (dataYearIndex !== -1) {
+        updatedData.gallery[dataYearIndex].folders.push({ name: folderName, images: [] });
+      }
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       setSelectedGalleryFolder(folderName);
       
@@ -510,13 +524,23 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     
     if (!confirm(`Delete folder ${folderName} and all its images?`)) return;
     
-    const updatedGallery = [...galleryData];
-    const yearIndex = updatedGallery.findIndex(y => y.year === selectedGalleryYear);
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
     
     if (yearIndex === -1) return;
     
+    const updatedGallery = [...gallery];
     updatedGallery[yearIndex].folders = updatedGallery[yearIndex].folders.filter(f => f.name !== folderName);
     setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data };
+    if (!updatedData.gallery) updatedData.gallery = [];
+    const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+    if (dataYearIndex !== -1) {
+      updatedData.gallery[dataYearIndex].folders = updatedData.gallery[dataYearIndex].folders.filter(f => f.name !== folderName);
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     if (selectedGalleryFolder === folderName) {
       setSelectedGalleryFolder("");
@@ -557,29 +581,38 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
     
     try {
-      const updatedGallery = [...galleryData];
-      const yearIndex = updatedGallery.findIndex(y => y.year === selectedGalleryYear);
+      const gallery = editing.gallery || data.gallery || [];
+      const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
       
       if (yearIndex === -1) return;
       
-      const folderIndex = updatedGallery[yearIndex].folders.findIndex(f => f.name === targetFolder);
+      const folderIndex = gallery[yearIndex].folders.findIndex(f => f.name === targetFolder);
       if (folderIndex === -1) return;
       
+      const updatedGallery = [...gallery];
       const currentImages = [...updatedGallery[yearIndex].folders[folderIndex].images];
       
       for (let i = 0; i < files.length; i++) {
         const folderPath = `gallery/${selectedGalleryYear}/${targetFolder}`;
         const url = await uploadImage(files[i], 'gallery', `gallery_${Date.now()}`, folderPath);
         const title = prompt(`Enter title for image ${i + 1}:`, files[i].name.replace(/\.[^/.]+$/, ""));
-        currentImages.push({ 
-          id: `img_${Date.now()}_${i}`, 
-          src: url, 
-          title: title || files[i].name 
-        });
+        currentImages.push({ id: `img_${Date.now()}_${i}`, src: url, title: title || files[i].name });
       }
       
       updatedGallery[yearIndex].folders[folderIndex].images = currentImages;
       setEditing({ ...editing, gallery: updatedGallery });
+      
+      const updatedData = { ...data };
+      if (!updatedData.gallery) updatedData.gallery = [];
+      const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+      if (dataYearIndex !== -1) {
+        const dataFolderIndex = updatedData.gallery[dataYearIndex].folders.findIndex(f => f.name === targetFolder);
+        if (dataFolderIndex !== -1) {
+          updatedData.gallery[dataYearIndex].folders[dataFolderIndex].images = currentImages;
+        }
+      }
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
         title: "Gallery images uploaded",
@@ -601,18 +634,31 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     
     if (!confirm("Delete this image?")) return;
     
-    const updatedGallery = [...galleryData];
-    const yearIndex = updatedGallery.findIndex(y => y.year === selectedGalleryYear);
+    const gallery = editing.gallery || data.gallery || [];
+    const yearIndex = gallery.findIndex(y => y.year === selectedGalleryYear);
     
     if (yearIndex === -1) return;
     
-    const folderIndex = updatedGallery[yearIndex].folders.findIndex(f => f.name === folderName);
+    const folderIndex = gallery[yearIndex].folders.findIndex(f => f.name === folderName);
     if (folderIndex === -1) return;
     
+    const updatedGallery = [...gallery];
     const images = [...updatedGallery[yearIndex].folders[folderIndex].images];
     images.splice(imageIndex, 1);
     updatedGallery[yearIndex].folders[folderIndex].images = images;
     setEditing({ ...editing, gallery: updatedGallery });
+    
+    const updatedData = { ...data };
+    if (!updatedData.gallery) updatedData.gallery = [];
+    const dataYearIndex = updatedData.gallery.findIndex(y => y.year === selectedGalleryYear);
+    if (dataYearIndex !== -1) {
+      const dataFolderIndex = updatedData.gallery[dataYearIndex].folders.findIndex(f => f.name === folderName);
+      if (dataFolderIndex !== -1) {
+        updatedData.gallery[dataYearIndex].folders[dataFolderIndex].images = images;
+      }
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Image removed",
@@ -620,27 +666,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  const updateGalleryImageTitle = (folderName: string, imageIndex: number, title: string) => {
-    if (!selectedGalleryYear) return;
-    
-    const updatedGallery = [...galleryData];
-    const yearIndex = updatedGallery.findIndex(y => y.year === selectedGalleryYear);
-    
-    if (yearIndex === -1) return;
-    
-    const folderIndex = updatedGallery[yearIndex].folders.findIndex(f => f.name === folderName);
-    if (folderIndex === -1) return;
-    
-    const images = [...updatedGallery[yearIndex].folders[folderIndex].images];
-    images[imageIndex] = { ...images[imageIndex], title };
-    updatedGallery[yearIndex].folders[folderIndex].images = images;
-    setEditing({ ...editing, gallery: updatedGallery });
-  };
-
-  // ✅ PORTFOLIO MANAGEMENT - CLEANER VERSION
-  const portfolioData = editing.portfolio || data.portfolio || [];
-  
+  // ✅ PORTFOLIO MANAGEMENT
   const addPortfolioItem = () => {
+    const portfolio = editing.portfolio || data.portfolio || [];
     const newItem: PortfolioItem = {
       id: `portfolio_${Date.now()}`,
       src: "",
@@ -649,9 +677,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       date: new Date().toISOString().split('T')[0]
     };
     
-    const updatedPortfolio = [...portfolioData, newItem];
+    const updatedPortfolio = [...portfolio, newItem];
     setEditing({ ...editing, portfolio: updatedPortfolio });
-    setEditPortfolioId(newItem.id);
+    
+    const updatedData = { ...data, portfolio: updatedPortfolio };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Portfolio item added",
@@ -660,15 +691,30 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   const updatePortfolioItem = (id: string, value: Partial<PortfolioItem>) => {
-    const updatedPortfolio = portfolioData.map(item => 
+    const portfolio = editing.portfolio || data.portfolio || [];
+    const updatedPortfolio = portfolio.map(item => 
       item.id === id ? { ...item, ...value } : item
     );
     setEditing({ ...editing, portfolio: updatedPortfolio });
+    
+    const updatedData = { ...data };
+    if (!updatedData.portfolio) updatedData.portfolio = [];
+    const dataIndex = updatedData.portfolio.findIndex(item => item.id === id);
+    if (dataIndex !== -1) {
+      updatedData.portfolio[dataIndex] = { ...updatedData.portfolio[dataIndex], ...value };
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   const removePortfolioItem = (id: string) => {
-    const updatedPortfolio = portfolioData.filter(item => item.id !== id);
+    const portfolio = editing.portfolio || data.portfolio || [];
+    const updatedPortfolio = portfolio.filter(item => item.id !== id);
     setEditing({ ...editing, portfolio: updatedPortfolio });
+    
+    const updatedData = { ...data, portfolio: updatedPortfolio };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Portfolio item removed",
@@ -687,10 +733,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ ACTIVITIES MANAGEMENT - CLEANER VERSION
-  const activitiesData = editing.activities || data.activities || [];
-  
+  // ✅ ACTIVITIES MANAGEMENT
   const addActivity = () => {
+    const activities = editing.activities || data.activities || [];
     const newActivity: Activity = {
       id: `activity_${Date.now()}`,
       title: "New Activity",
@@ -701,9 +746,12 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       category: "main"
     };
     
-    const updatedActivities = [...activitiesData, newActivity];
+    const updatedActivities = [...activities, newActivity];
     setEditing({ ...editing, activities: updatedActivities });
-    setEditActivityId(newActivity.id);
+    
+    const updatedData = { ...data, activities: updatedActivities };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Activity added",
@@ -712,15 +760,30 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   const updateActivity = (id: string, value: Partial<Activity>) => {
-    const updatedActivities = activitiesData.map(activity => 
+    const activities = editing.activities || data.activities || [];
+    const updatedActivities = activities.map(activity => 
       activity.id === id ? { ...activity, ...value } : activity
     );
     setEditing({ ...editing, activities: updatedActivities });
+    
+    const updatedData = { ...data };
+    if (!updatedData.activities) updatedData.activities = [];
+    const dataIndex = updatedData.activities.findIndex(activity => activity.id === id);
+    if (dataIndex !== -1) {
+      updatedData.activities[dataIndex] = { ...updatedData.activities[dataIndex], ...value };
+    }
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   const removeActivity = (id: string) => {
-    const updatedActivities = activitiesData.filter(activity => activity.id !== id);
+    const activities = editing.activities || data.activities || [];
+    const updatedActivities = activities.filter(activity => activity.id !== id);
     setEditing({ ...editing, activities: updatedActivities });
+    
+    const updatedData = { ...data, activities: updatedActivities };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Activity removed",
@@ -728,25 +791,26 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  // ✅ EXTRACURRICULAR ACTIVITIES - Using same activities array with category
-  const extracurricularActivities = activitiesData.filter(a => a.category === 'extracurricular');
-  const mainActivities = activitiesData.filter(a => a.category === 'main');
-
+  // ✅ EXTRACURRICULAR ACTIVITIES
   const addExtracurricularActivity = () => {
+    const activities = editing.activities || data.activities || [];
     const newActivity: Activity = {
       id: `extracurricular_${Date.now()}`,
       title: "New Extracurricular Activity",
+      description: "Activity description",
       date: "All year round",
       time: "",
       location: "Enkomokazini Technical High School",
-      description: "Activity description",
       category: "extracurricular",
       season: "year_round"
     };
     
-    const updatedActivities = [...activitiesData, newActivity];
+    const updatedActivities = [...activities, newActivity];
     setEditing({ ...editing, activities: updatedActivities });
-    setEditActivityId(newActivity.id);
+    
+    const updatedData = { ...data, activities: updatedActivities };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     
     toast({
       title: "Extracurricular activity added",
@@ -754,14 +818,14 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     });
   };
 
-  // ✅ TEAM MEMBER HANDLERS - CLEANER VERSION
+  // ✅ TEAM MEMBER HANDLERS
   const addTeamMember = () => {
     const t = editing.team ? [...editing.team] : data.team || [];
     t.push({ 
       name: "New Member", 
       role: "Team Role", 
       image: "",
-      bio: "Member biography here..."
+      secondaryImage: ""
     });
     setEditing({ ...editing, team: t });
   };
@@ -770,12 +834,22 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const t = editing.team ? [...editing.team] : data.team || [];
     t[index] = { ...t[index], ...value };
     setEditing({ ...editing, team: t });
+    
+    const updatedData = { ...data };
+    if (!updatedData.team) updatedData.team = [];
+    updatedData.team[index] = { ...updatedData.team[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeTeamMember = (index: number) => {
     const t = editing.team ? [...editing.team] : data.team || [];
     t.splice(index, 1);
     setEditing({ ...editing, team: t });
+    
+    const updatedData = { ...data, team: t };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   const handleTeamImageUpload = async (index: number, file?: File) => {
@@ -792,7 +866,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // ✅ SPONSOR HANDLERS - CLEANER VERSION
+  // ✅ SPONSOR HANDLERS
   const addSponsor = () => {
     const s = editing.sponsors ? [...editing.sponsors] : data.sponsors || [];
     s.push({ 
@@ -807,12 +881,22 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const s = editing.sponsors ? [...editing.sponsors] : data.sponsors || [];
     s[index] = { ...s[index], ...value };
     setEditing({ ...editing, sponsors: s });
+    
+    const updatedData = { ...data };
+    if (!updatedData.sponsors) updatedData.sponsors = [];
+    updatedData.sponsors[index] = { ...updatedData.sponsors[index], ...value };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
   
   const removeSponsor = (index: number) => {
     const s = editing.sponsors ? [...editing.sponsors] : data.sponsors || [];
     s.splice(index, 1);
     setEditing({ ...editing, sponsors: s });
+    
+    const updatedData = { ...data, sponsors: s };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   const handleSponsorImage = async (index: number, file?: File) => {
@@ -849,6 +933,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       }
       
       setEditing({ ...editing, heroImages: updatedImages });
+      
+      const updatedData = { ...data, heroImages: updatedImages };
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
       
       toast({
         title: "Hero images uploaded",
@@ -917,6 +1005,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const url = await uploadImage(file, 'school', 'school_image');
       setEditing({ ...editing, schoolImage: url });
+      
+      const updatedData = { ...data, schoolImage: url };
+      saveSiteData(updatedData);
+      window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
     } catch (error) {
       // Error already handled in uploadImage
     }
@@ -947,6 +1039,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const newImages = [...currentImages];
     newImages.splice(index, 1);
     setEditing({ ...editing, heroImages: newImages });
+    
+    const updatedData = { ...data, heroImages: newImages };
+    saveSiteData(updatedData);
+    window.dispatchEvent(new CustomEvent("siteDataUpdated", { detail: updatedData }));
   };
 
   const refreshCloudinaryConnection = async () => {
@@ -954,140 +1050,129 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     await testCloudinaryConnection();
   };
 
-  // Season options for activities
-  const seasonOptions = [
-    { value: 'january', label: 'January (TBC)' },
-    { value: 'february', label: 'February' },
-    { value: 'march', label: 'March' },
-    { value: 'april', label: 'April (TBC)' },
-    { value: 'may', label: 'May' },
-    { value: 'june', label: 'June' },
-    { value: 'july_september', label: 'July - September' },
-    { value: 'october', label: 'October' },
-    { value: 'november', label: 'November' },
-    { value: 'december', label: 'December' },
-    { value: 'year_round', label: 'All year round' },
-    { value: 'custom', label: 'Custom' }
-  ];
+  // Get data
+  const galleryData = editing.gallery || data.gallery || [];
+  const portfolioData = editing.portfolio || data.portfolio || [];
+  const activitiesData = editing.activities || data.activities || [];
+  const mainActivities = activitiesData.filter(a => a.category !== 'extracurricular');
+  const extracurricularActivities = activitiesData.filter(a => a.category === 'extracurricular');
 
-  // Portfolio category options
-  const portfolioCategories = ["All", "Awards", "Tours", "Sports", "Cultural", "Academic"];
-
-  // Default extracurricular activities from screenshots
-  const defaultExtracurricular = [
-    {
-      id: 'chess',
-      title: 'Enkomokazini Chess Club',
-      description: 'A strategic club that builds critical thinking and focus. Weekly practice and friendly competitions, all learners welcome.',
-      date: 'All year round',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'year_round'
-    },
-    {
-      id: 'debate',
-      title: 'Debating Society',
-      description: 'Public speaking and debating practice and competitions.',
-      date: 'All year round',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'year_round'
-    },
-    {
-      id: 'gospel',
-      title: 'Gospel',
-      description: 'Choir and contemporary gospel music activities. Rehearse regularly and perform uplifting sets for assemblies, services and special events.',
-      date: 'All year round',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'year_round'
-    },
-    {
-      id: 'ingoma',
-      title: 'Ingoma',
-      description: 'Ingoma is a percussive and vocal traditional performances that celebrate our musical heritage. Join rehearsals to learn rhythms, singing techniques and stage performance.',
-      date: 'June - September',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'july_september'
-    },
-    {
-      id: 'amahubo',
-      title: 'Amahubo',
-      description: 'Amahubo, a choir-style group focusing on hymns and praise songs. Perform at school events and community gatherings; all voices welcome, no prior experience required.',
-      date: 'June - September',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'july_september'
-    },
-    {
-      id: 'umshado',
-      title: 'Umshado',
-      description: 'Umshado, traditional wedding dance and performance group that explores cultural choreography and costume. Learn steps, teamwork and perform at cultural showcases.',
-      date: 'June - September',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'july_september'
-    },
-    {
-      id: 'soccer',
-      title: 'Soccer',
-      description: 'Teams: U/14, U/15, U/16 & 17, U/19. Regular training and fixtures, trials at term start; all skill levels welcome.',
-      date: 'All year round',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'year_round'
-    },
-    {
-      id: 'netball',
-      title: 'Netball',
-      description: 'Teams: U/14, U/16/17, U/19. Coached training and inter-school matches, attend trials or see the sports coordinator to join.',
-      date: 'All year round',
-      time: '',
-      location: 'Enkomokazini Technical High School',
-      category: 'extracurricular' as const,
-      season: 'year_round'
-    }
-  ];
-
-  // Initialize default extracurricular activities if empty
+  // Default extracurricular activities
   useEffect(() => {
     if (extracurricularActivities.length === 0) {
-      const updatedActivities = [...activitiesData, ...defaultExtracurricular];
+      const defaultActivities: Activity[] = [
+        {
+          id: 'chess',
+          title: 'Enkomokazini Chess Club',
+          description: 'A strategic club that builds critical thinking and focus. Weekly practice and friendly competitions, all learners welcome.',
+          date: 'All year round',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'year_round'
+        },
+        {
+          id: 'debate',
+          title: 'Debating Society',
+          description: 'Public speaking and debating practice and competitions.',
+          date: 'All year round',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'year_round'
+        },
+        {
+          id: 'gospel',
+          title: 'Gospel',
+          description: 'Choir and contemporary gospel music activities. Rehearse regularly and perform uplifting sets for assemblies, services and special events.',
+          date: 'All year round',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'year_round'
+        },
+        {
+          id: 'ingoma',
+          title: 'Ingoma',
+          description: 'Ingoma is a percussive and vocal traditional performances that celebrate our musical heritage. Join rehearsals to learn rhythms, singing techniques and stage performance.',
+          date: 'June - September',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'july_september'
+        },
+        {
+          id: 'amahubo',
+          title: 'Amahubo',
+          description: 'Amahubo, a choir-style group focusing on hymns and praise songs. Perform at school events and community gatherings; all voices welcome, no prior experience required.',
+          date: 'June - September',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'july_september'
+        },
+        {
+          id: 'umshado',
+          title: 'Umshado',
+          description: 'Umshado, traditional wedding dance and performance group that explores cultural choreography and costume. Learn steps, teamwork and perform at cultural showcases.',
+          date: 'June - September',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'july_september'
+        },
+        {
+          id: 'soccer',
+          title: 'Soccer',
+          description: 'Teams: U/14, U/15, U/16 & 17, U/19. Regular training and fixtures, trials at term start; all skill levels welcome.',
+          date: 'All year round',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'year_round'
+        },
+        {
+          id: 'netball',
+          title: 'Netball',
+          description: 'Teams: U/14, U/16/17, U/19. Coached training and inter-school matches, attend trials or see the sports coordinator to join.',
+          date: 'All year round',
+          time: '',
+          location: 'Enkomokazini Technical High School',
+          category: 'extracurricular',
+          season: 'year_round'
+        }
+      ];
+      
+      const updatedActivities = [...activitiesData, ...defaultActivities];
       setEditing({ ...editing, activities: updatedActivities });
     }
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
+    <div className="min-h-screen bg-secondary">
+      <header className="bg-card border-b border-border px-6 py-4 flex items-center justify-between shadow-card">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-gray-800">Enkomokazini Technical High School - Admin</h1>
-          <p className="text-gray-600 text-sm">
-            Edit school website content
+          <h1 className="font-serif text-2xl font-bold text-foreground">Admin Dashboard</h1>
+          <p className="text-muted-foreground text-sm">
+            Edit site content — changes save to local browser storage
             {isUploading && (
               <span className="ml-2 inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                <Loader2 size={12} className="animate-spin mr-1" /> Uploading...
+                <span className="animate-spin mr-1">⟳</span> Uploading...
               </span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors relative">
+          <button className="p-2 text-muted-foreground hover:text-foreground transition-colors relative">
             <Bell size={20} />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
+          </button>
+          <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+            <Settings size={20} />
           </button>
           <button
             onClick={onLogout}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
           >
             <LogOut size={18} />
             Logout
@@ -1099,9 +1184,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         {/* Cloudinary Status Bar */}
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-blue-800 flex items-center gap-2">
-              <UploadCloud size={20} /> Cloudinary Status
-            </h2>
+            <h2 className="text-lg font-semibold text-blue-800">Cloudinary Status</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={refreshCloudinaryConnection}
@@ -1140,933 +1223,853 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                       cloudinaryStatus === 'disconnected' ? 'DISCONNECTED' : 'CHECKING...'}
             </div>
             
-            <div className="text-right text-sm">
-              <p className="text-blue-700">
-                Cloud Name: <code className="ml-1 bg-blue-100 px-2 py-1 rounded">{cloudName}</code>
+            <div className="text-right">
+              <p className="text-sm text-blue-700">
+                Cloud Name: <code className="ml-1 bg-blue-100 px-2 py-1 rounded text-xs">{cloudName}</code>
               </p>
-              <p className="text-blue-700 mt-1">
-                Upload Preset: <code className="ml-1 bg-blue-100 px-2 py-1 rounded">{uploadPreset}</code>
+              <p className="text-sm text-blue-700 mt-1">
+                Upload Preset: <code className="ml-1 bg-blue-100 px-2 py-1 rounded text-xs">{uploadPreset}</code>
               </p>
             </div>
           </div>
+          
+          {cloudinaryStatus === 'disconnected' && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
+              <h3 className="text-sm font-medium text-amber-800 mb-1">Setup Required:</h3>
+              <div className="text-sm text-amber-700 space-y-2">
+                <p>1. In Cloudinary Dashboard:</p>
+                <ul className="ml-4 list-disc text-xs">
+                  <li>Go to <strong>Settings → Upload</strong></li>
+                  <li>Find preset <code>{uploadPreset}</code></li>
+                  <li>Ensure it's <strong>enabled</strong></li>
+                  <li>Set to <strong>Unsigned</strong> mode</li>
+                  <li>Enable "Auto-create folders"</li>
+                </ul>
+                <p>2. Current configuration:</p>
+                <pre className="mt-1 p-2 bg-amber-100 text-amber-800 rounded text-xs overflow-x-auto">
+{`Cloud Name: ${cloudName}
+Upload Preset: ${uploadPreset}`}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Editor Panel */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            {/* Navigation Tabs */}
-            <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('basic')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'basic'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Home size={16} className="inline mr-2" />
-                  Basic Info
-                </button>
-                <button
-                  onClick={() => setActiveTab('portfolio')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'portfolio'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Briefcase size={16} className="inline mr-2" />
-                  Portfolio
-                </button>
-                <button
-                  onClick={() => setActiveTab('activities')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'activities'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Calendar size={16} className="inline mr-2" />
-                  Activities
-                </button>
-                <button
-                  onClick={() => setActiveTab('gallery')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'gallery'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Camera size={16} className="inline mr-2" />
-                  Gallery
-                </button>
-                <button
-                  onClick={() => setActiveTab('team')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'team'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Users size={16} className="inline mr-2" />
-                  Team
-                </button>
-                <button
-                  onClick={() => setActiveTab('sponsors')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'sponsors'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Heart size={16} className="inline mr-2" />
-                  Sponsors
-                </button>
-                <button
-                  onClick={() => setActiveTab('hero')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'hero'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <ImagePlus size={16} className="inline mr-2" />
-                  Hero Images
-                </button>
-              </nav>
-            </div>
+          <div className="bg-card rounded-xl p-6 shadow-card border border-border">
+            <h2 className="font-serif text-xl font-semibold text-foreground mb-4">Site Editor</h2>
 
-            <div className="p-6">
-              {/* Basic Info Tab */}
-              {activeTab === 'basic' && (
-                <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-800 mb-4">Basic School Information</h2>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">School Name</label>
-                      <input 
-                        value={editing.schoolName || ""} 
-                        onChange={(e)=>setEditing({...editing, schoolName: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
-                      <input 
-                        value={editing.tagline || ""} 
-                        onChange={(e)=>setEditing({...editing, tagline: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                  </div>
+            <div className="space-y-4">
+              {/* School Name */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">School Name</label>
+                <input 
+                  value={editing.schoolName || ""} 
+                  onChange={(e)=>setEditing({...editing, schoolName: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  disabled={isUploading}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea 
-                      value={editing.description || ""} 
-                      onChange={(e)=>setEditing({...editing, description: e.target.value})} 
-                      className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                      rows={3}
-                      disabled={isUploading}
-                    />
-                  </div>
+              {/* Tagline */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Tagline</label>
+                <input 
+                  value={editing.tagline || ""} 
+                  onChange={(e)=>setEditing({...editing, tagline: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  disabled={isUploading}
+                />
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
-                      <input 
-                        value={editing.contactEmail || ""} 
-                        onChange={(e)=>setEditing({...editing, contactEmail: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                      <input 
-                        value={editing.phone || ""} 
-                        onChange={(e)=>setEditing({...editing, phone: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                  </div>
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                <textarea 
+                  value={editing.description || ""} 
+                  onChange={(e)=>setEditing({...editing, description: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  rows={4} 
+                  disabled={isUploading}
+                />
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                      <input 
-                        value={editing.address || ""} 
-                        onChange={(e)=>setEditing({...editing, address: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Pass Rate</label>
-                      <input 
-                        value={editing.passRate || ""} 
-                        onChange={(e)=>setEditing({...editing, passRate: e.target.value})} 
-                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                        placeholder="e.g., 95%" 
-                        disabled={isUploading}
-                      />
-                    </div>
-                  </div>
+              {/* Contact Email */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Contact Email</label>
+                <input 
+                  value={editing.contactEmail || ""} 
+                  onChange={(e)=>setEditing({...editing, contactEmail: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  disabled={isUploading}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">School Image</label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={async (e)=>{ 
-                        if(e.target.files && e.target.files[0]) {
-                          await handleSchoolImage(e.target.files[0]); 
-                        } 
-                      }} 
-                      className="w-full text-sm"
-                      disabled={isUploading}
-                    />
-                    {editing.schoolImage || data.schoolImage ? (
-                      <img 
-                        src={getImageSrc(editing.schoolImage || data.schoolImage)} 
-                        alt="school" 
-                        className="h-32 w-full object-cover rounded border border-gray-300 mt-2"
-                      />
-                    ) : null}
-                  </div>
+              {/* Phone & Postal */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Phone</label>
+                  <input 
+                    value={editing.phone || ""} 
+                    onChange={(e)=>setEditing({...editing, phone: e.target.value})} 
+                    className="w-full px-3 py-2 rounded border border-border bg-background" 
+                    disabled={isUploading}
+                  />
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Postal</label>
+                  <input 
+                    value={editing.postal || ""} 
+                    onChange={(e)=>setEditing({...editing, postal: e.target.value})} 
+                    className="w-full px-3 py-2 rounded border border-border bg-background" 
+                    disabled={isUploading}
+                  />
+                </div>
+              </div>
 
-              {/* Portfolio Tab */}
-              {activeTab === 'portfolio' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-800">Portfolio Management</h2>
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Address</label>
+                <input 
+                  value={editing.address || ""} 
+                  onChange={(e)=>setEditing({...editing, address: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  disabled={isUploading}
+                />
+              </div>
+
+              {/* Pass Rate */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Pass Rate</label>
+                <input 
+                  value={editing.passRate || ""} 
+                  onChange={(e)=>setEditing({...editing, passRate: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-border bg-background" 
+                  placeholder="e.g., 95%" 
+                  disabled={isUploading}
+                />
+              </div>
+
+              {/* Portfolio Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Portfolio Items</label>
+                  <div className="flex gap-1">
                     <button 
                       onClick={addPortfolioItem}
-                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
                       disabled={isUploading}
                     >
                       <Plus size={14} /> Add Item
                     </button>
                   </div>
-
-                  {/* Portfolio Filters */}
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {portfolioCategories.map(category => (
-                      <button
-                        key={category}
-                        onClick={() => setPortfolioFilter(category)}
-                        className={`px-3 py-1 rounded text-sm ${
-                          portfolioFilter === category
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Portfolio Items */}
-                  <div className="space-y-3">
-                    {portfolioData
-                      .filter(item => portfolioFilter === "All" || item.category === portfolioFilter)
-                      .map((item) => (
-                      <div key={item.id} className="border border-gray-200 rounded p-4">
-                        {editPortfolioId === item.id ? (
-                          <div className="space-y-3">
-                            <input 
-                              value={item.title} 
-                              onChange={(e)=>updatePortfolioItem(item.id, { title: e.target.value })} 
-                              className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                              placeholder="Title"
-                              disabled={isUploading}
-                            />
-                            <div className="grid grid-cols-2 gap-3">
-                              <select 
-                                value={item.category} 
-                                onChange={(e)=>updatePortfolioItem(item.id, { category: e.target.value })} 
-                                className="px-3 py-2 rounded border border-gray-300 bg-white"
-                                disabled={isUploading}
-                              >
-                                {portfolioCategories.map(cat => (
-                                  <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                              </select>
-                              <input 
-                                type="date"
-                                value={item.date} 
-                                onChange={(e)=>updatePortfolioItem(item.id, { date: e.target.value })} 
-                                className="px-3 py-2 rounded border border-gray-300 bg-white" 
-                                disabled={isUploading}
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                onChange={async (e)=>{ 
-                                  if(e.target.files && e.target.files[0]){ 
-                                    await handlePortfolioImageUpload(item.id, e.target.files[0]); 
-                                  } 
-                                }} 
-                                className="flex-1 text-sm"
-                                disabled={isUploading}
-                              />
-                              <button 
-                                onClick={() => setEditPortfolioId(null)}
-                                className="px-3 py-2 bg-gray-600 text-white rounded text-sm"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {item.src && (
-                                <img 
-                                  src={getImageSrc(item.src)} 
-                                  alt={item.title} 
-                                  className="h-16 w-16 object-cover rounded border border-gray-300"
-                                />
-                              )}
-                              <div>
-                                <h3 className="font-medium text-gray-800">{item.title}</h3>
-                                <p className="text-sm text-gray-600">{item.category} • {item.date}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setEditPortfolioId(item.id)}
-                                className="p-1 text-gray-500 hover:text-blue-600"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                onClick={()=>removePortfolioItem(item.id)} 
-                                className="p-1 text-gray-500 hover:text-red-600"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              )}
-
-              {/* Activities Tab */}
-              {activeTab === 'activities' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-800">School Activities</h2>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={addActivity}
-                        className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                        disabled={isUploading}
-                      >
-                        <Plus size={14} /> Add Activity
-                      </button>
-                      <button 
-                        onClick={addExtracurricularActivity}
-                        className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                        disabled={isUploading}
-                      >
-                        <Plus size={14} /> Add Extracurricular
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Main Activities */}
-                  <div>
-                    <h3 className="font-semibold text-gray-700 mb-3">Main School Activities</h3>
-                    <div className="space-y-3">
-                      {mainActivities.map((activity) => (
-                        <div key={activity.id} className="border border-gray-200 rounded p-4">
-                          {editActivityId === activity.id ? (
-                            <div className="space-y-3">
-                              <input 
-                                value={activity.title} 
-                                onChange={(e)=>updateActivity(activity.id, { title: e.target.value })} 
-                                className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                placeholder="Activity Title"
-                                disabled={isUploading}
-                              />
-                              <div className="grid grid-cols-2 gap-3">
-                                <select 
-                                  value={activity.season || 'january'} 
-                                  onChange={(e)=>updateActivity(activity.id, { 
-                                    season: e.target.value,
-                                    date: e.target.value === 'custom' ? activity.date : seasonOptions.find(s => s.value === e.target.value)?.label || ''
-                                  })} 
-                                  className="px-3 py-2 rounded border border-gray-300 bg-white"
-                                  disabled={isUploading}
-                                >
-                                  {seasonOptions.map(season => (
-                                    <option key={season.value} value={season.value}>{season.label}</option>
-                                  ))}
-                                </select>
-                                <input 
-                                  value={activity.location} 
-                                  onChange={(e)=>updateActivity(activity.id, { location: e.target.value })} 
-                                  className="px-3 py-2 rounded border border-gray-300 bg-white" 
-                                  placeholder="Location"
-                                  disabled={isUploading}
-                                />
-                              </div>
-                              {activity.season === 'custom' && (
-                                <input 
-                                  value={activity.date} 
-                                  onChange={(e)=>updateActivity(activity.id, { date: e.target.value })} 
-                                  className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                  placeholder="Custom date/season"
-                                  disabled={isUploading}
-                                />
-                              )}
-                              <textarea 
-                                value={activity.description} 
-                                onChange={(e)=>updateActivity(activity.id, { description: e.target.value })} 
-                                className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                placeholder="Description"
-                                rows={2}
-                                disabled={isUploading}
-                              />
-                              <div className="flex gap-2">
-                                <button 
-                                  onClick={() => setEditActivityId(null)}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
-                                >
-                                  Save
-                                </button>
-                                <button 
-                                  onClick={()=>removeActivity(activity.id)} 
-                                  className="px-3 py-2 bg-red-600 text-white rounded text-sm"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="font-medium text-gray-800">{activity.title}</h3>
-                                <p className="text-sm text-gray-600">{activity.date} • {activity.location}</p>
-                                {activity.description && (
-                                  <p className="text-sm text-gray-500 mt-1">{activity.description}</p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => setEditActivityId(activity.id)}
-                                  className="p-1 text-gray-500 hover:text-blue-600"
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  onClick={()=>removeActivity(activity.id)} 
-                                  className="p-1 text-gray-500 hover:text-red-600"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Extracurricular Activities */}
-                  <div>
-                    <h3 className="font-semibold text-gray-700 mb-3">Extracurricular Activities</h3>
-                    <div className="space-y-3">
-                      {extracurricularActivities.map((activity) => (
-                        <div key={activity.id} className="border border-gray-200 rounded p-4">
-                          {editActivityId === activity.id ? (
-                            <div className="space-y-3">
-                              <input 
-                                value={activity.title} 
-                                onChange={(e)=>updateActivity(activity.id, { title: e.target.value })} 
-                                className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                placeholder="Activity Title"
-                                disabled={isUploading}
-                              />
-                              <select 
-                                value={activity.season || 'year_round'} 
-                                onChange={(e)=>updateActivity(activity.id, { 
-                                  season: e.target.value,
-                                  date: e.target.value === 'custom' ? activity.date : seasonOptions.find(s => s.value === e.target.value)?.label || ''
-                                })} 
-                                className="w-full px-3 py-2 rounded border border-gray-300 bg-white"
-                                disabled={isUploading}
-                              >
-                                {seasonOptions.map(season => (
-                                  <option key={season.value} value={season.value}>{season.label}</option>
-                                ))}
-                              </select>
-                              {activity.season === 'custom' && (
-                                <input 
-                                  value={activity.date} 
-                                  onChange={(e)=>updateActivity(activity.id, { date: e.target.value })} 
-                                  className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                  placeholder="Custom date/season"
-                                  disabled={isUploading}
-                                />
-                              )}
-                              <textarea 
-                                value={activity.description} 
-                                onChange={(e)=>updateActivity(activity.id, { description: e.target.value })} 
-                                className="w-full px-3 py-2 rounded border border-gray-300 bg-white" 
-                                placeholder="Description"
-                                rows={3}
-                                disabled={isUploading}
-                              />
-                              <div className="flex gap-2">
-                                <button 
-                                  onClick={() => setEditActivityId(null)}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
-                                >
-                                  Save
-                                </button>
-                                <button 
-                                  onClick={()=>removeActivity(activity.id)} 
-                                  className="px-3 py-2 bg-red-600 text-white rounded text-sm"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h3 className="font-medium text-gray-800">{activity.title}</h3>
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    {activity.date}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">{activity.description}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => setEditActivityId(activity.id)}
-                                  className="p-1 text-gray-500 hover:text-blue-600"
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  onClick={()=>removeActivity(activity.id)} 
-                                  className="p-1 text-gray-500 hover:text-red-600"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Gallery Tab */}
-              {activeTab === 'gallery' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-800">Photo Gallery</h2>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={addGalleryYear}
-                        className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                        disabled={isUploading}
-                      >
-                        <Plus size={14} /> Add Year
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Year Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Year</label>
-                    <div className="flex flex-wrap gap-2">
-                      {galleryData.map((year) => (
-                        <button
-                          key={year.year}
-                          onClick={() => {
-                            setSelectedGalleryYear(year.year);
-                            setSelectedGalleryFolder("");
-                          }}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                            selectedGalleryYear === year.year
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
+                <div className="space-y-2">
+                  {portfolioData.map((item) => (
+                    <div key={item.id} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={item.title} 
+                          onChange={(e)=>updatePortfolioItem(item.id, { title: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <select 
+                          value={item.category} 
+                          onChange={(e)=>updatePortfolioItem(item.id, { category: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background"
                           disabled={isUploading}
                         >
-                          {year.year}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeGalleryYear(year.year);
-                            }}
-                            className="text-xs hover:text-red-500"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {selectedGalleryYear && (
-                    <>
-                      {/* Folder Management */}
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Folders in {selectedGalleryYear}
-                          </label>
-                          <button 
-                            onClick={addGalleryFolder}
-                            className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                            disabled={isUploading}
-                          >
-                            <FolderPlus size={12} /> Add Folder
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {galleryData.find(y => y.year === selectedGalleryYear)?.folders.map((folder) => (
-                            <button
-                              key={folder.name}
-                              onClick={() => {
-                                setSelectedGalleryFolder(folder.name);
-                                setGalleryUploadFolder(folder.name);
-                              }}
-                              className={`px-3 py-2 rounded text-sm flex items-center gap-2 ${
-                                selectedGalleryFolder === folder.name
-                                  ? "bg-blue-100 text-blue-700 border border-blue-300"
-                                  : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
-                              }`}
-                              disabled={isUploading}
-                            >
-                              <FolderOpen size={14} />
-                              {folder.name}
-                              <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">
-                                {folder.images.length} photo{folder.images.length !== 1 ? 's' : ''}
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeGalleryFolder(folder.name);
-                                }}
-                                className="text-xs text-gray-500 hover:text-red-600"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {selectedGalleryFolder && (
-                        <>
-                          {/* Image Upload */}
-                          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <label className="block text-sm font-medium text-blue-700 mb-2">
-                              Upload to <span className="font-bold">{selectedGalleryFolder}</span>
-                            </label>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              multiple 
-                              onChange={(e) => handleGalleryImageUpload(e, selectedGalleryFolder)} 
-                              className="w-full text-sm mb-2"
-                              disabled={isUploading}
-                            />
-                            <p className="text-xs text-blue-600">Select multiple images to upload at once</p>
-                          </div>
-
-                          {/* Existing Images */}
-                          <div>
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Images in {selectedGalleryFolder} ({galleryData.find(y => y.year === selectedGalleryYear)
-                                ?.folders.find(f => f.name === selectedGalleryFolder)?.images.length || 0})
-                            </h3>
-                            <div className="grid grid-cols-2 gap-3">
-                              {galleryData.find(y => y.year === selectedGalleryYear)
-                                ?.folders.find(f => f.name === selectedGalleryFolder)
-                                ?.images.map((image, idx) => (
-                                  <div key={image.id} className="border border-gray-200 rounded p-2">
-                                    <div className="relative mb-2">
-                                      <img 
-                                        src={getImageSrc(image.src)} 
-                                        alt={image.title} 
-                                        className="h-24 w-full object-cover rounded border border-gray-300"
-                                      />
-                                      <button
-                                        onClick={() => removeGalleryImage(selectedGalleryFolder, idx)}
-                                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                                        disabled={isUploading}
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                    <input 
-                                      value={image.title} 
-                                      onChange={(e) => updateGalleryImageTitle(selectedGalleryFolder, idx, e.target.value)} 
-                                      className="w-full px-2 py-1 text-sm rounded border border-gray-300" 
-                                      placeholder="Image title"
-                                      disabled={isUploading}
-                                    />
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Team Tab */}
-              {activeTab === 'team' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-800">Team Members</h2>
-                    <button 
-                      onClick={addTeamMember}
-                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                      disabled={isUploading}
-                    >
-                      <Plus size={14} /> Add Member
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {(editing.team || data.team || []).map((member, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="relative">
-                            <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden border border-gray-300 flex items-center justify-center">
-                              {member.image ? (
-                                <img 
-                                  src={getImageSrc(member.image)} 
-                                  alt={member.name} 
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-gray-400 font-medium text-lg">
-                                  {member.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                                </span>
-                              )}
-                            </div>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              onChange={async (e)=>{ 
-                                if(e.target.files && e.target.files[0]){ 
-                                  await handleTeamImageUpload(idx, e.target.files[0]); 
-                                } 
-                              }} 
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              disabled={isUploading}
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <input 
-                                  value={member.name} 
-                                  onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
-                                  className="text-lg font-medium text-gray-800 bg-transparent border-none focus:outline-none focus:ring-0 p-0" 
-                                  disabled={isUploading}
-                                />
-                                <input 
-                                  value={member.role} 
-                                  onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
-                                  className="text-sm text-gray-600 bg-transparent border-none focus:outline-none focus:ring-0 p-0 mt-1" 
-                                  disabled={isUploading}
-                                />
-                              </div>
-                              <button 
-                                onClick={()=>removeTeamMember(idx)} 
-                                className="p-1 text-gray-400 hover:text-red-600"
-                                disabled={isUploading}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                            <textarea 
-                              value={member.bio || ""} 
-                              onChange={(e)=>updateTeamMember(idx, { bio: e.target.value })} 
-                              className="w-full text-sm text-gray-500 bg-transparent border-none focus:outline-none focus:ring-0 p-0 mt-1" 
-                              placeholder="Member biography..."
-                              rows={2}
-                              disabled={isUploading}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Sponsors Tab */}
-              {activeTab === 'sponsors' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-800">Sponsors</h2>
-                    <button 
-                      onClick={addSponsor}
-                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                      disabled={isUploading}
-                    >
-                      <Plus size={14} /> Add Sponsor
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {(editing.sponsors || data.sponsors || []).map((sponsor, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            <div className="w-16 h-16 rounded bg-gray-50 border border-gray-300 overflow-hidden flex items-center justify-center">
-                              {sponsor.image ? (
-                                <img 
-                                  src={getImageSrc(sponsor.image)} 
-                                  alt={sponsor.name} 
-                                  className="w-full h-full object-contain p-2"
-                                />
-                              ) : (
-                                <span className="text-gray-400 text-xs">Logo</span>
-                              )}
-                            </div>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              onChange={async (e)=>{ 
-                                if(e.target.files && e.target.files[0]) {
-                                  await handleSponsorImage(idx, e.target.files[0]); 
-                                } 
-                              }} 
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              disabled={isUploading}
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <input 
-                                  value={sponsor.name} 
-                                  onChange={(e)=>updateSponsor(idx, { name: e.target.value })} 
-                                  className="text-lg font-medium text-gray-800 bg-transparent border-none focus:outline-none focus:ring-0 p-0" 
-                                  disabled={isUploading}
-                                />
-                                <input 
-                                  value={sponsor.url} 
-                                  onChange={(e)=>updateSponsor(idx, { url: e.target.value })} 
-                                  className="text-sm text-gray-600 bg-transparent border-none focus:outline-none focus:ring-0 p-0 mt-1" 
-                                  placeholder="https://..."
-                                  disabled={isUploading}
-                                />
-                              </div>
-                              <button 
-                                onClick={()=>removeSponsor(idx)} 
-                                className="p-1 text-gray-400 hover:text-red-600"
-                                disabled={isUploading}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Hero Images Tab */}
-              {activeTab === 'hero' && (
-                <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-800">Hero Images</h2>
-                  
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                    <label className="block text-sm font-medium text-blue-700 mb-2">
-                      Upload Hero Images (appears in slideshow)
-                    </label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      multiple 
-                      onChange={handleHeroImagesUpload} 
-                      className="w-full text-sm"
-                      disabled={isUploading}
-                    />
-                    <p className="text-xs text-blue-600 mt-1">Upload multiple images for the slideshow</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {(editing.heroImages || data.heroImages || []).map((url, i)=> (
-                      <div key={i} className="relative">
-                        <img 
-                          src={getImageSrc(url)} 
-                          alt={`hero-${i}`} 
-                          className="h-32 w-full object-cover rounded-lg border border-gray-300"
-                        />
-                        <button
-                          onClick={() => removeHeroImage(i)}
-                          className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
+                          <option value="All">All</option>
+                          <option value="Awards">Awards</option>
+                          <option value="Tours">Tours</option>
+                          <option value="Sports">Sports</option>
+                          <option value="Cultural">Cultural</option>
+                          <option value="Academic">Academic</option>
+                        </select>
+                        <button 
+                          onClick={()=>removePortfolioItem(item.id)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm hover:bg-destructive/90"
                           disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          type="date"
+                          value={item.date} 
+                          onChange={(e)=>updatePortfolioItem(item.id, { date: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          disabled={isUploading}
+                        />
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              await handlePortfolioImageUpload(item.id, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {item.src && (
+                        <img 
+                          src={getImageSrc(item.src)} 
+                          alt={item.title} 
+                          className="h-20 w-full object-cover rounded border border-border mt-2"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Activities Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">School Activities</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addActivity}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {mainActivities.map((activity) => (
+                    <div key={activity.id} className="border border-border rounded p-3 bg-background">
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          value={activity.title} 
+                          onChange={(e)=>updateActivity(activity.id, { title: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={activity.date} 
+                          onChange={(e)=>updateActivity(activity.id, { date: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Date"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input 
+                          value={activity.time} 
+                          onChange={(e)=>updateActivity(activity.id, { time: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Time"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={activity.location} 
+                          onChange={(e)=>updateActivity(activity.id, { location: e.target.value })} 
+                          className="px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Location"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <textarea 
+                          value={activity.description} 
+                          onChange={(e)=>updateActivity(activity.id, { description: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Description"
+                          rows={2}
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeActivity(activity.id)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm hover:bg-destructive/90"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Extracurricular Activities */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Extracurricular Activities</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addExtracurricularActivity}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {extracurricularActivities.map((activity) => (
+                    <div key={activity.id} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={activity.title} 
+                          onChange={(e)=>updateActivity(activity.id, { title: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Title"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeActivity(activity.id)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm hover:bg-destructive/90"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <textarea 
+                        value={activity.description} 
+                        onChange={(e)=>updateActivity(activity.id, { description: e.target.value })} 
+                        className="w-full px-2 py-1 rounded border border-border bg-background mb-2" 
+                        placeholder="Description"
+                        rows={2}
+                        disabled={isUploading}
+                      />
+                      <div className="flex gap-2">
+                        <input 
+                          value={activity.date} 
+                          onChange={(e)=>updateActivity(activity.id, { date: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Date/Season"
+                          disabled={isUploading}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gallery Management */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Gallery Management</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addGalleryYear}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Year
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Year Selection */}
+                <div className="mb-3">
+                  <label className="block text-xs text-muted-foreground mb-1">Select Year</label>
+                  <div className="flex flex-wrap gap-1">
+                    {galleryData.map((year) => (
+                      <button
+                        key={year.year}
+                        onClick={() => {
+                          setSelectedGalleryYear(year.year);
+                          setSelectedGalleryFolder("");
+                        }}
+                        className={`px-3 py-1 rounded text-sm ${
+                          selectedGalleryYear === year.year
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-background border border-border"
+                        }`}
+                        disabled={isUploading}
+                      >
+                        {year.year}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeGalleryYear(year.year);
+                          }}
+                          className="ml-1 text-xs hover:text-destructive"
                         >
                           ×
                         </button>
-                        <div className="text-xs text-gray-500 mt-1 text-center">Image {i + 1}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
-                  
-                  <p className="text-sm text-gray-600 text-center">
-                    {(editing.heroImages || data.heroImages || []).length} hero images
-                  </p>
                 </div>
-              )}
+
+                {selectedGalleryYear && (
+                  <>
+                    {/* Folder Management */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-muted-foreground">Folders in {selectedGalleryYear}</label>
+                        <button 
+                          onClick={addGalleryFolder}
+                          className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-xs hover:bg-accent/90"
+                          disabled={isUploading}
+                        >
+                          <FolderPlus size={12} /> Add Folder
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {galleryData.find(y => y.year === selectedGalleryYear)?.folders.map((folder) => (
+                          <button
+                            key={folder.name}
+                            onClick={() => {
+                              setSelectedGalleryFolder(folder.name);
+                              setGalleryUploadFolder(folder.name);
+                            }}
+                            className={`px-3 py-1 rounded text-sm flex items-center gap-1 ${
+                              selectedGalleryFolder === folder.name
+                                ? "bg-accent text-accent-foreground"
+                                : "bg-background border border-border"
+                            }`}
+                            disabled={isUploading}
+                          >
+                            <FolderOpen size={12} />
+                            {folder.name}
+                            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {folder.images.length} photo{folder.images.length !== 1 ? 's' : ''}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeGalleryFolder(folder.name);
+                              }}
+                              className="ml-1 text-xs hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Image Upload for Selected Folder */}
+                    {selectedGalleryFolder && (
+                      <div className="mb-3">
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Upload to {selectedGalleryFolder}
+                        </label>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          multiple 
+                          onChange={(e) => handleGalleryImageUpload(e, selectedGalleryFolder)} 
+                          className="w-full text-sm"
+                          disabled={isUploading}
+                        />
+                      </div>
+                    )}
+
+                    {/* Folder Images Display */}
+                    {selectedGalleryFolder && (
+                      <div className="mt-3">
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Images in {selectedGalleryFolder}
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {galleryData.find(y => y.year === selectedGalleryYear)
+                            ?.folders.find(f => f.name === selectedGalleryFolder)
+                            ?.images.map((image, idx) => (
+                              <div key={image.id} className="relative">
+                                <img 
+                                  src={getImageSrc(image.src)} 
+                                  alt={image.title} 
+                                  className="h-20 w-full object-cover rounded border border-border"
+                                />
+                                <div className="text-xs mt-1 truncate">{image.title}</div>
+                                <button
+                                  onClick={() => removeGalleryImage(selectedGalleryFolder, idx)}
+                                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-destructive/90"
+                                  disabled={isUploading}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Team Members Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Team Members</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addTeamMember}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {(editing.team || data.team || []).map((m, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={m.name} 
+                          onChange={(e)=>updateTeamMember(idx, { name: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Name"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={m.role} 
+                          onChange={(e)=>updateTeamMember(idx, { role: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Role"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeTeamMember(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm hover:bg-destructive/90"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              await handleTeamImageUpload(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          placeholder="Profile Image"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]){ 
+                              const url = await uploadImage(e.target.files[0], 'team', `secondary_${m.name}`);
+                              updateTeamMember(idx, { secondaryImage: url });
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          placeholder="Secondary Image"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {(m.image || m.secondaryImage) && (
+                        <div className="flex gap-2 mt-2">
+                          {m.image && (
+                            <img 
+                              src={getImageSrc(m.image)} 
+                              alt={m.name} 
+                              className="h-20 w-20 object-cover rounded border border-border"
+                            />
+                          )}
+                          {m.secondaryImage && (
+                            <img 
+                              src={getImageSrc(m.secondaryImage)} 
+                              alt={`${m.name} secondary`} 
+                              className="h-20 w-20 object-cover rounded border border-border"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sponsors Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Sponsors</label>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={addSponsor}
+                      className="flex items-center gap-1 px-2 py-1 bg-accent text-accent-foreground rounded text-sm hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {(editing.sponsors || data.sponsors || []).map((s, idx) => (
+                    <div key={idx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          value={s.name} 
+                          onChange={(e)=>updateSponsor(idx, { name: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Name"
+                          disabled={isUploading}
+                        />
+                        <input 
+                          value={s.url} 
+                          onChange={(e)=>updateSponsor(idx, { url: e.target.value })} 
+                          className="flex-1 px-2 py-1 rounded border border-border bg-background" 
+                          placeholder="Website URL"
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeSponsor(idx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded text-sm hover:bg-destructive/90"
+                          disabled={isUploading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e)=>{ 
+                            if(e.target.files && e.target.files[0]) {
+                              await handleSponsorImage(idx, e.target.files[0]); 
+                            } 
+                          }} 
+                          className="text-sm flex-1"
+                          disabled={isUploading}
+                        />
+                      </div>
+                      {s.image && (
+                        <img 
+                          src={getImageSrc(s.image)} 
+                          alt={s.name} 
+                          className="h-20 w-full object-contain rounded border border-border mt-2 bg-gray-50 p-2"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hero Images Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">Hero Images</label>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    cloudinaryStatus === 'connected' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
+                  </span>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  multiple 
+                  onChange={handleHeroImagesUpload} 
+                  className="w-full"
+                  disabled={isUploading}
+                />
+                <div className="mt-2 flex gap-2 flex-wrap">
+                  {(editing.heroImages || data.heroImages || []).map((u, i)=> (
+                    <div key={i} className="relative">
+                      <img 
+                        src={getImageSrc(u)} 
+                        alt={`hero-${i}`} 
+                        className="h-20 w-32 object-cover rounded border border-border"
+                      />
+                      <button
+                        onClick={() => removeHeroImage(i)}
+                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-destructive/90"
+                        disabled={isUploading}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(editing.heroImages || data.heroImages || []).length} images
+                </p>
+              </div>
+
+              {/* School Image Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-foreground">School Image</label>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    cloudinaryStatus === 'connected' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {cloudinaryStatus === 'connected' ? `Cloudinary (${uploadPreset})` : 'Local Storage'}
+                  </span>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={async (e)=>{ 
+                    if(e.target.files && e.target.files[0]) {
+                      await handleSchoolImage(e.target.files[0]); 
+                    } 
+                  }} 
+                  className="w-full"
+                  disabled={isUploading}
+                />
+                <div className="mt-2">
+                  <img 
+                    src={getImageSrc(
+                      editing.schoolImage || data.schoolImage || (data.heroImages && data.heroImages[0])
+                    )} 
+                    alt="school" 
+                    className="h-28 w-full object-cover rounded border border-border"
+                  />
+                </div>
+              </div>
+
+              {/* Services */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Services (Streams)</label>
+                <div className="space-y-3">
+                  {(editing.services || data.services || []).map((svc, sIdx) => (
+                    <div key={sIdx} className="border border-border rounded p-3 bg-background">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          value={svc.category} 
+                          onChange={(e)=>updateService(sIdx, { category: e.target.value })} 
+                          className="flex-1 px-2 py-2 rounded border border-border bg-background" 
+                          disabled={isUploading}
+                        />
+                        <button 
+                          onClick={()=>removeService(sIdx)} 
+                          className="px-2 py-1 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90"
+                          disabled={isUploading}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {(svc.subjects || []).map((sub: any, subIdx: number) => (
+                          <div key={subIdx} className="flex gap-2 items-center">
+                            <input 
+                              value={sub.name} 
+                              onChange={(e)=>updateSubject(sIdx, subIdx, { name: e.target.value })} 
+                              className="flex-1 px-2 py-2 rounded border border-border bg-background" 
+                              disabled={isUploading}
+                            />
+                            <input 
+                              value={sub.passMark} 
+                              onChange={(e)=>updateSubject(sIdx, subIdx, { passMark: e.target.value })} 
+                              className="w-28 px-2 py-2 rounded border border-border bg-background" 
+                              disabled={isUploading}
+                            />
+                            <button 
+                              onClick={()=>removeSubject(sIdx, subIdx)} 
+                              className="px-2 py-1 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90"
+                              disabled={isUploading}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        <div className="mt-2">
+                          <button 
+                            onClick={()=>addSubject(sIdx)} 
+                            className="px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
+                            disabled={isUploading}
+                          >
+                            Add Subject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div>
+                    <button 
+                      onClick={addService} 
+                      className="px-3 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90"
+                      disabled={isUploading}
+                    >
+                      Add Stream
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* UI Settings */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">UI Settings</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Preview Count</label>
+                    <input 
+                      type="number" 
+                      value={(editing.ui && editing.ui.servicesPreviewCount) || (data.ui && data.ui.servicesPreviewCount) || 6} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          servicesPreviewCount: Number(e.target.value)
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Badge Color</label>
+                    <input 
+                      value={(editing.ui && editing.ui.badgeColor) || (data.ui && data.ui.badgeColor) || 'blue'} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          badgeColor: e.target.value
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Transition (ms)</label>
+                    <input 
+                      type="number" 
+                      value={(editing.ui && editing.ui.transitionMs) || (data.ui && data.ui.transitionMs) || 300} 
+                      onChange={(e)=>setEditing({
+                        ...editing, 
+                        ui: {
+                          ...(editing.ui||data.ui||{}), 
+                          transitionMs: Number(e.target.value)
+                        }
+                      })} 
+                      className="w-full px-2 py-2 rounded border border-border bg-background" 
+                      disabled={isUploading}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Preview count, badge color (name), and transition duration (ms)</p>
+              </div>
 
               {/* Save & Reset Buttons */}
-              <div className="flex gap-3 pt-6 border-t border-gray-200">
+              <div className="flex gap-2 pt-4">
                 <button 
                   onClick={handleSave} 
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded hover:bg-accent/90 disabled:opacity-50"
                   disabled={isUploading}
                 >
-                  {isUploading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={18} />
-                      Save All Changes
-                    </>
-                  )}
+                  <Save size={18} />
+                  {isUploading ? "Saving..." : "Save All Changes"}
                 </button>
                 <button 
                   onClick={handleReset} 
-                  className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
                   disabled={isUploading}
                 >
                   Reset All
@@ -2077,10 +2080,10 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
           {/* Preview Panel */}
           <div className="space-y-6">
-            <div className="sticky top-6 bg-white rounded-xl p-4 shadow-sm border border-gray-200 z-10">
+            <div className="sticky top-6 bg-card rounded-xl p-4 shadow-card border border-border">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <Eye size={20} /> Live Preview
+                <h2 className="font-serif text-xl font-semibold text-foreground">
+                  Live Preview
                 </h2>
                 <div className="flex items-center gap-2">
                   <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
@@ -2095,33 +2098,33 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   </span>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">
-                Preview updates automatically as you edit. Click "Save All Changes" to persist.
+              <p className="text-sm text-muted-foreground mb-4">
+                Preview updates automatically as you edit. Save changes to persist them.
               </p>
             </div>
             
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <HeroCarousel />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <AboutSection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <PortfolioSection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <GallerySection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <TeamSection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <ActivitiesSection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <ContactSection />
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <div className="bg-card rounded-xl p-4 shadow-card border border-border">
               <Footer />
             </div>
           </div>
