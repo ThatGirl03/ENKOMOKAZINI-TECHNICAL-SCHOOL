@@ -1025,9 +1025,9 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 md:ml-64">
-          <div className="p-4 md:p-6">
+        {/* Main Content - Fixed layout to use full width */}
+        <div className="flex-1 w-full md:w-[calc(100%-16rem)]">
+          <div className="p-4 md:p-6 w-full">
             {/* Cloudinary Status Bar - Mobile */}
             <div className="md:hidden mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between mb-3">
@@ -1055,14 +1055,15 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Editor Panel */}
-              <div className="bg-card rounded-xl p-4 md:p-6 shadow-card border border-border">
+            {/* Two Column Layout with full width */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+              {/* Editor Panel - Takes full left side */}
+              <div className="bg-card rounded-xl p-4 md:p-6 shadow-card border border-border h-full">
                 <h2 className="font-serif text-xl font-semibold text-foreground mb-4">
                   {navSections.find(s => s.id === activeSection)?.label}
                 </h2>
 
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto pr-2">
                   {/* Basic Info Section */}
                   {activeSection === 'basic' && (
                     <div className="space-y-4">
@@ -1847,7 +1848,7 @@ export const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 </div>
               </div>
 
-              {/* Preview Panel */}
+              {/* Preview Panel - Takes full right side */}
               <div className="space-y-6">
                 <div className="sticky top-6 bg-card rounded-xl p-4 shadow-card border border-border z-10">
                   <div className="mb-4 flex items-center justify-between">
