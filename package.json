@@ -11,6 +11,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
+    "postbuild": "cp -r public/* dist/ 2>/dev/null || true"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
