@@ -8,4 +8,28 @@
     "VITE_CLOUDINARY_CLOUD_NAME": "dn2inh6kt",
     "VITE_CLOUDINARY_UPLOAD_PRESET": "enkomokazini-signed-upload"
   }
+ "routes": [
+    {
+      "src": "/robots.txt",
+      "dest": "/robots.txt",
+      "headers": {
+        "Content-Type": "text/plain",
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/sitemap.xml",
+      "headers": {
+        "Content-Type": "application/xml",
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
+  
 }
