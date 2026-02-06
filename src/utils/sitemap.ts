@@ -1,15 +1,15 @@
-import { SiteData } from '../types/siteData';
-
-export function generateSitemap(siteData: SiteData): string {
+// src/utils/sitemap.ts
+export function generateSitemap(): string {
   const baseUrl = 'https://enkomokazinitech.co.za';
+  const today = new Date().toISOString().split('T')[0];
+  
+  // For single-page app, only list the homepage
   const pages = [
-    { loc: '/', lastmod: new Date().toISOString().split('T')[0], priority: '1.0' },
-    { loc: '/about', priority: '0.9' },
-    { loc: '/academics', priority: '0.9' },
-    { loc: '/admissions', priority: '0.8' },
-    { loc: '/contact', priority: '0.7' },
-    { loc: '/staff', priority: '0.7' },
-    { loc: '/programs', priority: '0.8' },
+    { 
+      loc: '/', 
+      lastmod: today, 
+      priority: '1.0' 
+    }
   ];
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -17,8 +17,8 @@ export function generateSitemap(siteData: SiteData): string {
   ${pages.map(page => `
   <url>
     <loc>${baseUrl}${page.loc}</loc>
-    <lastmod>${page.lastmod || new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
+    <lastmod>${page.lastmod}</lastmod>
+    <changefreq>daily</changefreq>
     <priority>${page.priority}</priority>
   </url>`).join('')}
 </urlset>`;
