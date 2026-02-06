@@ -7,8 +7,8 @@
   "env": {
     "VITE_CLOUDINARY_CLOUD_NAME": "dn2inh6kt",
     "VITE_CLOUDINARY_UPLOAD_PRESET": "enkomokazini-signed-upload"
-  }
- "routes": [
+  },
+  "routes": [
     {
       "src": "/robots.txt",
       "dest": "/robots.txt",
@@ -31,5 +31,3 @@
     }
   ]
 }
-  
-
