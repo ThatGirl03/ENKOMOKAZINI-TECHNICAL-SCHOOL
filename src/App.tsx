@@ -11,6 +11,7 @@ import AcademicsPage from "./pages/AcademicsPage";
 import ContactPage from "./pages/ContactPage";
 import StaffPage from "./pages/StaffPage";
 import NotFound from "./pages/NotFound";
+import { Header } from "./components/Header"; // ADDED THIS
 
 const queryClient = new QueryClient();
 
