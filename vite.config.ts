@@ -5,8 +5,6 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current directory
-  // This will automatically expose VITE_* variables to your app
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
@@ -23,11 +21,16 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    // REMOVE the define section - it's not needed for VITE_ variables
-    // Vite automatically exposes VITE_* variables to import.meta.env
+    // ADD THIS: Public directory configuration
+    publicDir: 'public',
+    
     build: {
       outDir: 'dist',
       sourcemap: false,
+      // ADD THIS: Copy public folder contents
+      copyPublicDir: true,
+      // ADD THIS: Empty output directory before build
+      emptyOutDir: true,
     },
   };
 });
