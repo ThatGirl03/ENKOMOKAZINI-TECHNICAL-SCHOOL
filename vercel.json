@@ -23,5 +23,19 @@
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     }
+  ],
+  "routes": [
+    {
+      "src": "/robots.txt",
+      "dest": "/robots.txt"
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/sitemap.xml"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }
