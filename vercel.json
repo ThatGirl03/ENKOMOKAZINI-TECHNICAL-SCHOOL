@@ -8,22 +8,42 @@
     "VITE_CLOUDINARY_CLOUD_NAME": "dn2inh6kt",
     "VITE_CLOUDINARY_UPLOAD_PRESET": "enkomokazini-signed-upload"
   },
+  "headers": [
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain"
+        },
+        {
+          "key": "Cache-Control", 
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
   "routes": [
     {
       "src": "/robots.txt",
-      "dest": "/robots.txt",
-      "headers": {
-        "Content-Type": "text/plain",
-        "Cache-Control": "public, max-age=86400"
-      }
+      "dest": "/robots.txt"
     },
     {
       "src": "/sitemap.xml",
-      "dest": "/sitemap.xml",
-      "headers": {
-        "Content-Type": "application/xml",
-        "Cache-Control": "public, max-age=86400"
-      }
+      "dest": "/sitemap.xml"
     },
     {
       "src": "/(.*)",
