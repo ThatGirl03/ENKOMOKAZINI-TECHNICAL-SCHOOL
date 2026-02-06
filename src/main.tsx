@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
-import App from "../App.tsx";
-import "../index.css";
+import App from "./App.tsx";
+import "./index.css";
 import { loadSiteData, saveSiteData } from "@/lib/siteData";
 
 async function bootstrap() {
