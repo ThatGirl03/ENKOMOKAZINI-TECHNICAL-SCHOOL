@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-ZA">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- ADDED: Structured Data (JSON-LD) - PUT THIS FIRST! -->
+    <!-- PRIMARY STRUCTURED DATA: High School -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -27,69 +27,129 @@
         "latitude": -28.9981,
         "longitude": 29.8717
       },
-      "telephone": "+27-XXX-XXX-XXXX",
-      "email": "info@enkomokazinitech.co.za",
+      "telephone": "+27-72-604-1779",
+      "email": "enkomokazinitechnical@gmail.com",
       "foundingDate": "2013",
       "areaServed": "Estcourt, Loskop, KwaZulu-Natal",
       "educationalLevel": "Secondary",
       "curriculum": "CAPS",
       "slogan": "THROUGH DIFFICULTIES WE SUCCEED",
-      "passRate": "85%"
+      "passRate": "85%",
+      "sameAs": []
     }
     </script>
     
-    <!-- IMPROVED TITLE -->
-    <title>Enkomokazini Technical High School | Estcourt, KwaZulu-Natal | Technical Education Excellence</title>
+    <!-- SECONDARY STRUCTURED DATA: WebPage for Single-Page App -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Enkomokazini Technical High School - Official Website",
+      "description": "Official website of Enkomokazini Technical High School in Loskop, Estcourt, KwaZulu-Natal",
+      "url": "https://enkomokazinitech.co.za",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://enkomokazinitech.co.za/"
+          }
+        ]
+      },
+      "mainContentOfPage": {
+        "@type": "WebPageElement",
+        "cssSelector": ["#home", "#about", "#services", "#team", "#gallery", "#contact"]
+      }
+    }
+    </script>
     
-    <!-- IMPROVED DESCRIPTION -->
-    <meta name="description" content="Enkomokazini Technical High School in Loskop, Estcourt - A leading technical school in KwaZulu-Natal with 85% pass rate. Specializing in technical subjects, engineering, and vocational training for grades 8-12. Admissions open." />
+    <!-- TITLE: Primary keyword first -->
+    <title>Enkomokazini Technical High School | Technical Education Estcourt | KwaZulu-Natal</title>
     
-    <!-- EXPANDED KEYWORDS -->
-    <meta name="keywords" content="Enkomokazini Technical High School, Enkomokazini Tech School, Technical High School Estcourt, Schools in Loskop, KZN Technical Schools, Estcourt High Schools, Technical Education South Africa, Vocational Training KwaZulu-Natal, Engineering Subjects High School, Admissions 2024" />
+    <!-- DESCRIPTION: Concise and keyword-rich -->
+    <meta name="description" content="Enkomokazini Technical High School in Loskop, Estcourt - Technical education with 85% pass rate. Science, Engineering, Tourism streams for Grades 8-12. Admissions open for 2024." />
     
+    <!-- KEYWORDS: Focused on local search -->
+    <meta name="keywords" content="Enkomokazini Technical High School, Technical School Estcourt, Schools in Loskop, KZN Technical Education, Estcourt High Schools, Technical Subjects South Africa, Vocational Training KwaZulu-Natal, Engineering School, Science Stream, Admissions 2024" />
+    
+    <!-- AUTHOR & COPYRIGHT -->
     <meta name="author" content="Enkomokazini Technical High School" />
+    <meta name="copyright" content="Enkomokazini Technical High School" />
     
-    <!-- ADDED: GEO TAGS for local SEO -->
+    <!-- LOCAL SEO: Geo tags -->
     <meta name="geo.region" content="ZA-NL" />
     <meta name="geo.placename" content="Estcourt, KwaZulu-Natal" />
     <meta name="geo.position" content="-28.9981;29.8717" />
     <meta name="ICBM" content="-28.9981, 29.8717" />
     
-    <!-- IMPROVED OPEN GRAPH TAGS -->
-    <meta property="og:title" content="Enkomokazini Technical High School | Technical Excellence in KZN" />
-    <meta property="og:description" content="Leading technical high school in Loskop, Estcourt with 85% pass rate. Specializing in engineering and vocational education." />
+    <!-- OPEN GRAPH: Social sharing -->
+    <meta property="og:title" content="Enkomokazini Technical High School | Estcourt, KZN" />
+    <meta property="og:description" content="Technical education excellence in Estcourt, KwaZulu-Natal. 85% pass rate. Engineering, Science, and Tourism streams." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://enkomokazinitech.co.za" />
     <meta property="og:image" content="https://enkomokazinitech.co.za/assets/N1.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:site_name" content="Enkomokazini Technical High School" />
     <meta property="og:locale" content="en_ZA" />
     
-    <!-- IMPROVED TWITTER CARD TAGS -->
+    <!-- TWITTER CARD -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Enkomokazini Technical High School | Estcourt, KZN" />
-    <meta name="twitter:description" content="Excellence in technical education with 85% pass rate. Specializing in engineering and vocational training." />
+    <meta name="twitter:title" content="Enkomokazini Technical High School" />
+    <meta name="twitter:description" content="Technical education excellence in Estcourt, KwaZulu-Natal" />
     <meta name="twitter:image" content="https://enkomokazinitech.co.za/assets/N1.jpg" />
-    <meta name="twitter:site" content="@EnkomokaziniTech" />
     
-    <!-- FIXED: Update canonical URL to your actual domain -->
+    <!-- CANONICAL URL -->
     <link rel="canonical" href="https://enkomokazinitech.co.za" />
     
-    <link rel="icon" href="/assets/School-Logo.jpeg" />
-    
-    <!-- ADDED: Favicon variations -->
+    <!-- FAVICON -->
+    <link rel="icon" href="/assets/School-Logo.jpeg" type="image/jpeg" />
     <link rel="shortcut icon" href="/assets/School-Logo.jpeg" type="image/jpeg" />
     <link rel="apple-touch-icon" href="/assets/School-Logo.jpeg" />
     
-    <!-- ADDED: Theme color for mobile browsers -->
+    <!-- THEME & STYLING -->
     <meta name="theme-color" content="#003366" />
+    <meta name="msapplication-TileColor" content="#003366" />
     
-    <!-- ADDED: Language and region -->
+    <!-- LANGUAGE & REGION -->
     <meta http-equiv="content-language" content="en-ZA" />
+    <meta name="language" content="English" />
+    <meta name="country" content="South Africa" />
+    
+    <!-- ROBOTS -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    
+    <!-- VIEWPORT ENHANCEMENT -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0" />
+    
+    <!-- PREFETCH CRITICAL ASSETS -->
+    <link rel="preconnect" href="https://enkomokazinitech.co.za" />
+    <link rel="dns-prefetch" href="https://enkomokazinitech.co.za" />
+    
+    <!-- GOOGLE SITE VERIFICATION (Add your code when you get it) -->
+    <!-- <meta name="google-site-verification" content="YOUR_VERIFICATION_CODE" /> -->
   </head>
 
   <body>
+    <!-- REACT ROOT -->
     <div id="root"></div>
+    
+    <!-- MAIN SCRIPT -->
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- CLOUDINARY (keep only if used) -->
     <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
+    
+    <!-- NOSCRIPT FALLBACK -->
+    <noscript>
+      <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 9999; padding: 20px; text-align: center;">
+        <h1>Enkomokazini Technical High School</h1>
+        <p>JavaScript is required to view this website. Please enable JavaScript in your browser settings.</p>
+        <p>For more information, contact: 072 604 1779 or enkomokazinitechnical@gmail.com</p>
+        <p>Address: Loskop, Estcourt, KwaZulu-Natal, 3310</p>
+      </div>
+    </noscript>
   </body>
 </html>
