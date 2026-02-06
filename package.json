@@ -11,7 +11,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postbuild": "cp -r public/* dist/ 2>/dev/null || true",
+    "postbuild": "cp -r public/. dist/ 2>/dev/null || echo 'Copy failed'"
     "clean": "rm -rf node_modules && rm -rf .next && rm -rf .vercel",
     "build:force": "vite build --force"
   },
