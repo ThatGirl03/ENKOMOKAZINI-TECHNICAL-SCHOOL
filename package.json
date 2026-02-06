@@ -11,7 +11,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postbuild": "cp public/robots.txt dist/robots.txt && cp public/sitemap.xml dist/sitemap.xml",
+    "postbuild": "cp public/robots.txt dist/robots.txt && cp public/sitemap.xml dist/sitemap.xml && echo 'Static files copied'"
     "clean": "rm -rf node_modules && rm -rf .next && rm -rf .vercel"
   },
   "dependencies": {
