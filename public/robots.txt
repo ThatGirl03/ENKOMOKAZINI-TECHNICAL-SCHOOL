@@ -3,5 +3,4 @@ Allow: /
 Disallow: /admin/
 Disallow: /private/
 
-# Sitemaps
 Sitemap: https://enkomokazinitech.co.za/sitemap.xml
