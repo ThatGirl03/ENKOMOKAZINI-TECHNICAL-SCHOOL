@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
@@ -21,15 +20,14 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    // ADD THIS: Public directory configuration
+    // ADD THIS:
     publicDir: 'public',
     
     build: {
       outDir: 'dist',
       sourcemap: false,
-      // ADD THIS: Copy public folder contents
+      // ADD THIS:
       copyPublicDir: true,
-      // ADD THIS: Empty output directory before build
       emptyOutDir: true,
     },
   };
