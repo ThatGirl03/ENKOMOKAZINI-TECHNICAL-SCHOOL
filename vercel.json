@@ -9,6 +9,9 @@
     "VITE_CLOUDINARY_UPLOAD_PRESET": "enkomokazini-signed-upload"
   },
   "routes": [
+     {
+      "handle": "filesystem"
+    },
     {
       "src": "/robots.txt",
       "dest": "/robots.txt",
